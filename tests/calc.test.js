@@ -63,3 +63,36 @@ test('unidades vendidas por impresión y gramos por filamento', () => {
   assert.deepEqual(Calc.soldByPrint([{ printId: 'p', quantity: 2 }, { printId: 'p', quantity: 1 }, { printId: null, quantity: 5 }]), { p: 3 });
   assert.deepEqual(Calc.gramsByFilament([{ filamentId: 'a', grams: 10 }, { filamentId: 'a', grams: 5 }]), { a: 15 });
 });
+
+test('cada impresora aplica su propio consumo, amortización y mantenimiento', () => {
+  const job = { items: [{ filamentId: 'a', grams: 100 }], hours: 10, quantity: 1 };
+  const cheap = { watts: 150, price: 200, lifeHours: 4000, maintenancePerHour: 0.05 };
+  const pro = { watts: 100, price: 1200, lifeHours: 6000, maintenancePerHour: 0.1 };
+  const c1 = Calc.printCost(job, fil, settings, cheap);
+  const c2 = Calc.printCost(job, fil, settings, pro);
+  close(c1.electricity, 10 * 0.15 * 0.2);
+  close(c1.machine, 10 * (200 / 4000 + 0.05));
+  close(c2.electricity, 10 * 0.1 * 0.2);
+  close(c2.machine, 10 * (1200 / 6000 + 0.1));
+  close(c1.material, c2.material);
+  close(Calc.printerHourCost(settings, pro), 0.2 + 0.1 + 0.02);
+  // sin impresora se usan los valores de ajustes
+  close(Calc.printCost(job, fil, settings).machine, 10 * 0.2);
+});
+
+test('estadísticas por impresora', () => {
+  const state = {
+    prints: [
+      { id: 'j1', printerId: 'A', hours: 5, quantity: 2, cost: { total: 6 } },
+      { id: 'j2', printerId: 'A', hours: 3, quantity: 1, cost: { total: 4 } },
+      { id: 'j3', printerId: 'B', hours: 1, quantity: 1, cost: { total: 1 } },
+    ],
+    sales: [
+      { printId: 'j1', quantity: 2, unitPrice: 10, fees: 2, unitCost: 3 },
+      { printId: null, quantity: 1, unitPrice: 99, fees: 0, unitCost: 0 },
+    ],
+  };
+  const st = Calc.printerStats(state);
+  assert.deepEqual(st.A, { hours: 8, jobs: 2, units: 3, cost: 10, revenue: 20, profit: 12 });
+  assert.deepEqual(st.B, { hours: 1, jobs: 1, units: 1, cost: 1, revenue: 0, profit: 0 });
+});

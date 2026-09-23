@@ -39,6 +39,9 @@
   };
 
   const filamentsById = () => Object.fromEntries(S.filaments.map((f) => [f.id, f]));
+  const findPrinter = (id) => S.printers.find((x) => x.id === id);
+  const defaultPrinter = () => findPrinter(S.settings.defaultPrinterId) || S.printers[0];
+  const printerHourCost = (pr) => window.Calc.printerHourCost(S.settings, pr);
   const filamentLabel = (f) => `${f.name}${f.material ? ' · ' + f.material : ''}`;
   const lowThreshold = (f) => (f.lowStock === '' || f.lowStock == null ? num(S.settings.lowStockGrams) : num(f.lowStock));
   const isLow = (f) => num(f.remaining) <= lowThreshold(f);
@@ -110,7 +113,11 @@
 
   function openModal({ title, body, submitLabel = 'Guardar', onOpen, onSubmit }) {
     $('#modal-title').textContent = title;
-    $('#modal-body').innerHTML = body;
+    // cuerpo nuevo en cada apertura para no acumular listeners de formularios anteriores
+    const old = $('#modal-body');
+    const fresh = old.cloneNode(false);
+    old.replaceWith(fresh);
+    fresh.innerHTML = body;
     $('#modal-submit').textContent = submitLabel;
     modalSubmit = onSubmit;
     modal.showModal();
@@ -171,7 +178,7 @@
       .filter((x) => x.left > 0);
     const unsoldValue = unsold.reduce((s, x) => s + x.left * num(x.p.cost && x.p.cost.unit), 0);
 
-    const empty = !S.filaments.length && !S.prints.length && !S.sales.length && !S.expenses.length;
+    const empty = !S.printers.length && !S.filaments.length && !S.prints.length && !S.sales.length && !S.expenses.length;
 
     return `
       <div class="page-head">
@@ -179,8 +186,9 @@
         <div class="filters">${periodSelect('period', ui.period)}</div>
       </div>
       ${empty ? `<div class="card"><h2>Bienvenido 👋</h2>
-        <p>Empieza añadiendo tus <b>filamentos</b> (con su precio y stock), registra cada <b>impresión</b> para calcular su coste y descontar el material, y apunta tus <b>ventas</b> para ver tu beneficio real.</p>
-        <div class="filters"><button class="btn primary" data-action="new-filament">Añadir filamento</button>
+        <p>Empieza añadiendo tus <b>impresoras</b> y tus <b>filamentos</b> (con su precio y stock), registra cada <b>impresión</b> para calcular su coste y descontar el material, y apunta tus <b>ventas</b> para ver tu beneficio real.</p>
+        <div class="filters"><button class="btn primary" data-action="new-printer">Añadir impresora</button>
+        <button class="btn" data-action="new-filament">Añadir filamento</button>
         <button class="btn" data-action="load-demo">Cargar datos de ejemplo</button></div></div>` : ''}
       <div class="kpis">
         <div class="kpi"><div class="label">Ingresos por ventas</div><div class="value">${money(r.revenue)}</div>
@@ -432,6 +440,102 @@
     });
   }
 
+  // ================================================================ IMPRESORAS
+
+  function viewPrinters() {
+    const stats = window.Calc.printerStats(S);
+    const dp = defaultPrinter();
+    return `
+      <div class="page-head">
+        <h1>Impresoras</h1>
+        <div class="actions"><button class="btn primary" data-action="new-printer">+ Nueva impresora</button></div>
+      </div>
+      <div class="card">
+        ${S.printers.length ? `<div class="table-wrap"><table>
+          <thead><tr><th>Impresora</th><th class="num">Consumo</th><th class="num">Precio</th><th class="num">Coste / hora</th>
+            <th>Vida útil usada</th><th class="num">Trabajos</th><th class="num">Ingresos</th><th class="num">Beneficio</th><th></th></tr></thead>
+          <tbody>${S.printers.map((pr) => {
+            const st = stats[pr.id] || { hours: 0, jobs: 0, revenue: 0, profit: 0 };
+            const life = num(pr.lifeHours);
+            const pct = life > 0 ? Math.min(100, (st.hours / life) * 100) : 0;
+            const isDefault = dp && dp.id === pr.id;
+            return `<tr>
+              <td><b>${esc(pr.name)}</b> ${isDefault ? '<span class="badge ok">★ Predeterminada</span>' : ''}
+                ${pr.notes ? `<div class="small muted">${esc(pr.notes)}</div>` : ''}</td>
+              <td class="num">${fmtNum(pr.watts)} W</td>
+              <td class="num">${money(pr.price)}</td>
+              <td class="num"><b>${money(printerHourCost(pr))}</b>
+                <div class="small muted">máq. ${money(window.Calc.machineHourCost(S.settings, pr))} · luz ${money((num(pr.watts) / 1000) * num(S.settings.kwhPrice))}</div></td>
+              <td><div class="stock"><div class="stock-bar"><span style="width:${pct}%"></span></div>
+                <span class="nowrap small">${fmtNum(st.hours, 1)} / ${fmtNum(life)} h</span></div></td>
+              <td class="num">${fmtNum(st.jobs)}</td>
+              <td class="num">${money(st.revenue)}</td>
+              <td class="num">${moneySigned(st.profit)}</td>
+              <td class="actions">
+                ${isDefault ? '' : `<button class="icon-btn" data-action="default-printer" data-id="${pr.id}" aria-label="Usar por defecto" title="Usar por defecto">☆</button>`}
+                <button class="icon-btn" data-action="edit-printer" data-id="${pr.id}" aria-label="Editar" title="Editar">✎</button>
+                <button class="icon-btn" data-action="delete-printer" data-id="${pr.id}" aria-label="Eliminar" title="Eliminar">🗑</button>
+              </td></tr>`;
+          }).join('')}</tbody>
+        </table></div>` : `<div class="empty">Añade tus impresoras para que cada impresión use su propio consumo, amortización y mantenimiento.</div>`}
+      </div>
+      <p class="small muted">Coste / hora = amortización (precio ÷ vida útil) + mantenimiento + electricidad (consumo × ${money(S.settings.kwhPrice)}/kWh). Ingresos y beneficio salen de las ventas de piezas impresas en cada impresora. Cambiar una impresora no modifica el coste de impresiones ya registradas.</p>`;
+  }
+
+  function printerForm(pr) {
+    const isNew = !pr;
+    const st = S.settings;
+    pr = pr || { name: '', notes: '', watts: st.printerWatts, price: st.printerPrice, lifeHours: st.printerLifeHours, maintenancePerHour: st.maintenancePerHour };
+    openModal({
+      title: isNew ? 'Nueva impresora' : 'Editar impresora',
+      body: `<div class="form-grid">
+        ${field('Nombre *', inp('name', pr.name, 'required placeholder="Ej. Bambu Lab P1S"'), { wide: true })}
+        ${field('Consumo medio (W) *', numInp('watts', pr.watts, 'required min="0"'), { hint: 'Ender/Prusa ≈ 80–150 W; con cámara cerrada más.' })}
+        ${field('Precio de compra *', numInp('price', pr.price, 'required min="0"'))}
+        ${field('Vida útil estimada (h) *', numInp('lifeHours', pr.lifeHours, 'required min="1"'), { hint: 'Horas en las que la amortizas.' })}
+        ${field('Mantenimiento (/h)', numInp('maintenancePerHour', pr.maintenancePerHour, 'min="0"'), { hint: 'Boquillas, correas, PEI…' })}
+        ${field('Notas', inp('notes', pr.notes, 'placeholder="Boquilla 0.4, cama PEI…"'), { wide: true })}
+        ${isNew ? `${field('Fecha de compra', `<input type="date" name="date" value="${today()}">`)}
+          <div class="field wide"><label class="check"><input type="checkbox" name="asExpense"> Registrar la compra como gasto (Impresoras y herramientas)</label></div>` : ''}
+      </div>
+      <div class="price-box" id="printer-preview"></div>`,
+      onOpen: (b) => {
+        const read = () => ({ watts: val(b, 'watts'), price: val(b, 'price'), lifeHours: val(b, 'lifeHours'), maintenancePerHour: val(b, 'maintenancePerHour') });
+        const refresh = () => {
+          const x = read();
+          const life = num(x.lifeHours);
+          $('#printer-preview', b).innerHTML = `
+            <div><div class="small muted">Amortización</div><strong>${money(life > 0 ? num(x.price) / life : 0)}/h</strong></div>
+            <div><div class="small muted">Mantenimiento</div><strong>${money(x.maintenancePerHour)}/h</strong></div>
+            <div><div class="small muted">Electricidad</div><strong>${money((num(x.watts) / 1000) * num(S.settings.kwhPrice))}/h</strong></div>
+            <div><div class="small muted">Total por hora</div><strong>${money(printerHourCost(x))}</strong></div>`;
+        };
+        b.addEventListener('input', refresh);
+        refresh();
+      },
+      onSubmit: (b) => {
+        const data = {
+          name: val(b, 'name'), notes: val(b, 'notes'), watts: num(val(b, 'watts')), price: num(val(b, 'price')),
+          lifeHours: num(val(b, 'lifeHours')), maintenancePerHour: num(val(b, 'maintenancePerHour')),
+        };
+        if (data.lifeHours <= 0) { toast('La vida útil debe ser mayor que 0.'); return false; }
+        if (isNew) {
+          const np = { id: uid(), ...data };
+          S.printers.push(np);
+          if (!findPrinter(S.settings.defaultPrinterId)) S.settings.defaultPrinterId = np.id;
+          if (checked(b, 'asExpense') && data.price > 0) {
+            S.expenses.push({ id: uid(), date: val(b, 'date') || today(), category: 'maquinaria', description: `Impresora ${data.name}`, amount: data.price, printerId: np.id });
+          }
+          persist('Impresora añadida');
+        } else {
+          Object.assign(pr, data);
+          S.prints.forEach((p) => { if (p.printerId === pr.id) p.printerName = pr.name; });
+          persist('Impresora actualizada');
+        }
+      },
+    });
+  }
+
   // ================================================================ IMPRESIONES
 
   function viewPrints() {
@@ -455,7 +559,7 @@
             const s = num(sold[p.id]);
             return `<tr>
               <td class="nowrap">${fmtDate(p.date)}</td>
-              <td><b>${esc(p.name)}</b><div class="small muted">${esc((p.items || []).map((it) => it.filamentName).join(', '))}</div></td>
+              <td><b>${esc(p.name)}</b><div class="small muted">${esc([p.printerName, (p.items || []).map((it) => it.filamentName).join(', ')].filter(Boolean).join(' · '))}</div></td>
               <td class="num">${fmtNum(p.quantity)}</td>
               <td class="num">${fmtGrams(g)}</td>
               <td class="num">${fmtHours(p.hours)}</td>
@@ -471,7 +575,7 @@
           }).join('')}</tbody>
         </table></div>` : `<div class="empty">Registra tu primera impresión para calcular su coste y descontar el filamento usado.</div>`}
       </div>
-      <p class="small muted">El coste incluye material, electricidad (${fmtNum(S.settings.printerWatts)} W a ${money(S.settings.kwhPrice)}/kWh), amortización y mantenimiento de la impresora, mano de obra, extras y un ${fmtNum(S.settings.failureRate)} % por fallos. Cámbialo en Ajustes.</p>`;
+      <p class="small muted">El coste incluye material, electricidad (consumo de cada impresora a ${money(S.settings.kwhPrice)}/kWh), amortización y mantenimiento de la impresora usada, mano de obra, extras y un ${fmtNum(S.settings.failureRate)} % por fallos. Cámbialo en Impresoras y Ajustes.</p>`;
   }
 
   function filamentOptions(selected) {
@@ -481,12 +585,24 @@
 
   function printForm(p, { quoteOnly = false } = {}) {
     const isNew = !p;
+    if (!S.printers.length && !quoteOnly) {
+      toast('Primero añade tu impresora.');
+      return printerForm();
+    }
     if (!S.filaments.length && !quoteOnly) {
       toast('Primero añade al menos un filamento.');
       return filamentForm();
     }
-    p = p || { name: '', date: today(), quantity: 1, hours: 2, items: [{ filamentId: S.filaments[0] ? S.filaments[0].id : '', grams: 50 }], laborHours: 0, extras: 0, margin: '', notes: '', stockDeducted: true };
+    const dp = defaultPrinter();
+    p = p || { printerId: dp ? dp.id : '', name: '', date: today(), quantity: 1, hours: 2, items: [{ filamentId: S.filaments[0] ? S.filaments[0].id : '', grams: 50 }], laborHours: 0, extras: 0, margin: '', notes: '', stockDeducted: true };
     const h = Math.floor(num(p.hours)), m = Math.round((num(p.hours) - h) * 60);
+    const printerMissing = !isNew && p.printerId && !findPrinter(p.printerId);
+    const selPrinterId = findPrinter(p.printerId) ? p.printerId : (dp ? dp.id : '');
+    const printerField = S.printers.length
+      ? field('Impresora', `<select name="printerId">${S.printers.map((pr) =>
+          `<option value="${pr.id}"${pr.id === selPrinterId ? ' selected' : ''}>${esc(pr.name)} · ${money(printerHourCost(pr))}/h</option>`).join('')}</select>`,
+          { wide: true, hint: printerMissing ? `⚠ La impresora original (${esc(p.printerName || '')}) se eliminó; elige otra.` : 'Cada impresora tiene su consumo, amortización y mantenimiento.' })
+      : '';
 
     const itemRow = (it) => `<div class="item-row">
         <select name="item-filament" aria-label="Filamento">${filamentOptions(it.filamentId)}</select>
@@ -498,6 +614,7 @@
       submitLabel: quoteOnly ? 'Guardar como impresión' : 'Guardar',
       body: `<div class="form-grid">
           ${field('Pieza *', inp('name', p.name, 'required placeholder="Ej. Soporte móvil"'), { wide: true })}
+          ${printerField}
           ${field('Fecha', `<input type="date" name="date" value="${esc(p.date)}">`)}
           ${field('Unidades producidas', numInp('quantity', p.quantity, 'min="1" step="1"'), { hint: 'Piezas que salen de este trabajo.' })}
           ${field('Horas', numInp('h', h, 'min="0" step="1"'))}
@@ -522,6 +639,7 @@
           return { filamentId: id, filamentName: f ? filamentLabel(f) : '', grams: num($('[name="item-grams"]', row).value) };
         }).filter((it) => it.filamentId && it.grams > 0);
         const readJob = () => ({
+          printerId: val(b, 'printerId'),
           items: readItems(),
           hours: num(val(b, 'h')) + num(val(b, 'm')) / 60,
           quantity: Math.max(1, Math.floor(num(val(b, 'quantity'))) || 1),
@@ -531,7 +649,8 @@
         });
         const refresh = () => {
           const job = readJob();
-          const c = printCost(job, filamentsById(), S.settings);
+          const pr = findPrinter(job.printerId);
+          const c = printCost(job, filamentsById(), S.settings, pr);
           // stock disponible teniendo en cuenta lo que este trabajo ya descontó
           const prev = !isNew && p.stockDeducted ? gramsByFilament(p.items) : {};
           const short = Object.entries(gramsByFilament(job.items))
@@ -540,8 +659,8 @@
           $('#preview', b).innerHTML = `
             <dl class="breakdown">
               <dt>Material</dt><dd>${money(c.material)}</dd>
-              <dt>Electricidad</dt><dd>${money(c.electricity)}</dd>
-              <dt>Amortización y mantenimiento</dt><dd>${money(c.machine)}</dd>
+              <dt>Electricidad${pr ? ` (${fmtNum(pr.watts)} W)` : ''}</dt><dd>${money(c.electricity)}</dd>
+              <dt>Amortización y mantenimiento${pr ? ` · ${esc(pr.name)}` : ''}</dt><dd>${money(c.machine)}</dd>
               <dt>Mano de obra</dt><dd>${money(c.labor)}</dd>
               <dt>Extras</dt><dd>${money(c.extras)}</dd>
               <dt>Margen de fallos (${fmtNum(S.settings.failureRate)} %)</dt><dd>${money(c.failure)}</dd>
@@ -572,8 +691,9 @@
       onSubmit: (b) => {
         const job = b._readJob();
         if (!job.items.length && !job.hours) { toast('Indica el filamento usado o el tiempo de impresión.'); return false; }
-        const cost = printCost(job, filamentsById(), S.settings);
-        const data = { ...job, name: val(b, 'name'), date: val(b, 'date') || today(), notes: val(b, 'notes'), cost };
+        const pr = findPrinter(job.printerId);
+        const cost = printCost(job, filamentsById(), S.settings, pr);
+        const data = { ...job, printerName: pr ? pr.name : '', name: val(b, 'name'), date: val(b, 'date') || today(), notes: val(b, 'notes'), cost };
         if (isNew) {
           const deduct = checked(b, 'deduct');
           if (deduct) applyStock(data.items, -1);
@@ -763,7 +883,6 @@
   function viewSettings() {
     const st = S.settings;
     const theme = safeGet('daprintbox:theme') || 'auto';
-    const hourCost = window.Calc.machineHourCost(st) + (num(st.printerWatts) / 1000) * num(st.kwhPrice);
     return `
       <div class="page-head"><h1>Ajustes</h1></div>
       <form class="card" id="settings-form">
@@ -771,16 +890,12 @@
         <div class="form-grid">
           ${field('Moneda', `<select name="currency">${['EUR', 'USD', 'MXN', 'ARS', 'COP', 'CLP', 'GBP'].map((c) => `<option${c === st.currency ? ' selected' : ''}>${c}</option>`).join('')}</select>`)}
           ${field('Precio electricidad (/kWh)', numInp('kwhPrice', st.kwhPrice, 'min="0"'))}
-          ${field('Consumo medio impresora (W)', numInp('printerWatts', st.printerWatts, 'min="0"'), { hint: 'Una Ender/Prusa suele rondar 80–150 W.' })}
-          ${field('Precio de la impresora', numInp('printerPrice', st.printerPrice, 'min="0"'))}
-          ${field('Vida útil estimada (h)', numInp('printerLifeHours', st.printerLifeHours, 'min="0"'))}
-          ${field('Mantenimiento (/h)', numInp('maintenancePerHour', st.maintenancePerHour, 'min="0"'), { hint: 'Boquillas, correas, PEI…' })}
           ${field('Mano de obra (/h)', numInp('laborRate', st.laborRate, 'min="0"'))}
           ${field('Margen por fallos (%)', numInp('failureRate', st.failureRate, 'min="0"'))}
           ${field('Margen de beneficio por defecto (%)', numInp('defaultMargin', st.defaultMargin, 'min="0"'))}
           ${field('Aviso de stock bajo (g)', numInp('lowStockGrams', st.lowStockGrams, 'min="0"'))}
         </div>
-        <p class="small muted">Cada hora de impresión cuesta ahora ${money(hourCost)} en máquina + electricidad (sin material).</p>
+        <p class="small muted">El consumo, precio, vida útil y mantenimiento de cada máquina se configuran en <a href="#printers">Impresoras</a>.</p>
         <button class="btn primary" type="submit">Guardar ajustes</button>
       </form>
 
@@ -859,7 +974,11 @@
     const f2 = { id: uid(), name: 'PETG Transparente', material: 'PETG', color: '#cfe8f3', colorName: 'Transparente', brand: 'Prusament', diameter: '1.75', spoolWeight: 1000, price: 29.99, remaining: 0, lowStock: '' };
     const f3 = { id: uid(), name: 'PLA Silk Oro', material: 'Silk PLA', color: '#d4a93a', colorName: 'Oro', brand: 'Eryone', diameter: '1.75', spoolWeight: 1000, price: 22.5, remaining: 0, lowStock: 250 };
     const f4 = { id: uid(), name: 'TPU Rojo', material: 'TPU', color: '#c62828', colorName: 'Rojo', brand: 'Overture', diameter: '1.75', spoolWeight: 500, price: 18, remaining: 0, lowStock: 100 };
-    const state = { version: 1, settings: st, filaments: [f1, f2, f3, f4], prints: [], sales: [], expenses: [] };
+    const pr1 = { id: uid(), name: 'Bambu Lab P1S', notes: 'Cerrada · AMS', watts: 110, price: 699, lifeHours: 6000, maintenancePerHour: 0.08 };
+    const pr2 = { id: uid(), name: 'Creality Ender 3 V3', notes: 'Boquilla 0.4', watts: 150, price: 229, lifeHours: 4000, maintenancePerHour: 0.05 };
+    st.defaultPrinterId = pr1.id;
+    const state = { version: 1, settings: st, printers: [pr1, pr2], filaments: [f1, f2, f3, f4], prints: [], sales: [], expenses: [] };
+    state.expenses.push({ id: uid(), date: d(0, 1), category: 'maquinaria', description: 'Impresora Creality Ender 3 V3', amount: 229, printerId: pr2.id });
     const buy = (f, n, date) => { f.remaining += n * f.spoolWeight; state.expenses.push({ id: uid(), date, category: 'filamento', description: `${n} × ${filamentLabel(f)}`, amount: n * f.price, filamentId: f.id }); };
     buy(f1, 3, d(0, 3)); buy(f2, 1, d(0, 3)); buy(f3, 1, d(1, 12)); buy(f4, 1, d(2, 5)); buy(f1, 2, d(4, 8));
     state.expenses.push({ id: uid(), date: d(0, 10), category: 'repuestos', description: 'Boquillas 0.4 mm y cama PEI', amount: 34.9 });
@@ -867,18 +986,19 @@
     state.expenses.push({ id: uid(), date: d(5, 1), category: 'repuestos', description: 'Correas GT2', amount: 12.5 });
     const byId = () => Object.fromEntries(state.filaments.map((f) => [f.id, f]));
     const print = (name, date, qty, hours, items, extra = {}) => {
-      const job = { items: items.map(([f, g]) => ({ filamentId: f.id, filamentName: filamentLabel(f), grams: g })), hours, quantity: qty, laborHours: extra.labor || 0, extras: extra.extras || 0, margin: '' };
-      const p = { id: uid(), name, date, notes: '', ...job, cost: printCost(job, byId(), st), stockDeducted: true };
+      const pr = extra.printer || pr1;
+      const job = { printerId: pr.id, printerName: pr.name, items: items.map(([f, g]) => ({ filamentId: f.id, filamentName: filamentLabel(f), grams: g })), hours, quantity: qty, laborHours: extra.labor || 0, extras: extra.extras || 0, margin: '' };
+      const p = { id: uid(), name, date, notes: '', ...job, cost: printCost(job, byId(), st, pr), stockDeducted: true };
       job.items.forEach((it) => { byId()[it.filamentId].remaining -= it.grams; });
       state.prints.push(p);
       return p;
     };
     const sell = (p, date, qty, price, fees, customer, channel) => state.sales.push({ id: uid(), date, printId: p.id, description: p.name, quantity: qty, unitPrice: price, fees, unitCost: p.cost.unit, customer, channel, costFromPrint: true });
-    const p1 = print('Soporte de auriculares', d(0, 6), 4, 14, [[f1, 520]], { labor: 0.5 });
+    const p1 = print('Soporte de auriculares', d(0, 6), 4, 14, [[f1, 520]], { labor: 0.5, printer: pr2 });
     const p2 = print('Maceta geométrica', d(1, 2), 3, 9.5, [[f3, 390]], { extras: 1.5 });
     const p3 = print('Organizador de escritorio', d(1, 20), 2, 11, [[f1, 610], [f2, 120]], { labor: 1 });
-    const p4 = print('Fundas flexibles', d(2, 9), 10, 6, [[f4, 330]], { extras: 2 });
-    const p5 = print('Lámpara lunar', d(3, 15), 2, 18, [[f2, 480]], { extras: 12, labor: 1 });
+    const p4 = print('Fundas flexibles', d(2, 9), 10, 6, [[f4, 330]], { extras: 2, printer: pr2 });
+    const p5 = print('Lámpara lunar', d(3, 15), 2, 18, [[f2, 480]], { extras: 12, labor: 1, printer: pr2 });
     const p6 = print('Llaveros personalizados', d(4, 11), 25, 5, [[f1, 150], [f3, 90]], { labor: 1.5 });
     const p7 = print('Maceta geométrica', d(5, 4), 4, 12.5, [[f3, 450]], { extras: 2 });
     sell(p1, d(0, 14), 2, 14.9, 2.4, 'Laura', 'Etsy'); sell(p1, d(1, 3), 2, 14.9, 1.2, '', 'Wallapop');
@@ -891,7 +1011,7 @@
 
   // ================================================================ ENRUTADO Y EVENTOS
 
-  const VIEWS = { dashboard: viewDashboard, filaments: viewFilaments, prints: viewPrints, sales: viewSales, expenses: viewExpenses, settings: viewSettings };
+  const VIEWS = { dashboard: viewDashboard, filaments: viewFilaments, printers: viewPrinters, prints: viewPrints, sales: viewSales, expenses: viewExpenses, settings: viewSettings };
   const currentView = () => { const v = location.hash.slice(1); return VIEWS[v] ? v : 'dashboard'; };
 
   function render() {
@@ -938,6 +1058,17 @@
       S.filaments = S.filaments.filter((x) => x.id !== id);
       persist('Filamento eliminado');
     },
+    'new-printer': () => printerForm(),
+    'edit-printer': (id) => printerForm(findPrinter(id)),
+    'default-printer': (id) => { S.settings.defaultPrinterId = id; persist('Impresora predeterminada cambiada'); },
+    'delete-printer': (id) => {
+      const pr = findPrinter(id);
+      const jobs = S.prints.filter((p) => p.printerId === id).length;
+      if (!confirm(`¿Eliminar "${pr.name}"?` + (jobs ? `\nSus ${jobs} impresión(es) conservan el coste ya calculado.` : ''))) return;
+      S.printers = S.printers.filter((x) => x.id !== id);
+      if (S.settings.defaultPrinterId === id) S.settings.defaultPrinterId = S.printers[0] ? S.printers[0].id : '';
+      persist('Impresora eliminada');
+    },
     'new-print': () => printForm(),
     'quote': () => printForm(null, { quoteOnly: true }),
     'edit-print': (id) => printForm(find(S.prints, id)),
@@ -970,7 +1101,7 @@
     'import-json': () => $('#import-file').click(),
     'export-csv': (id, el) => exportCSV(el.dataset.kind),
     'load-demo': () => {
-      const hasData = S.filaments.length || S.prints.length || S.sales.length || S.expenses.length;
+      const hasData = S.printers.length || S.filaments.length || S.prints.length || S.sales.length || S.expenses.length;
       if (hasData && !confirm('Los datos de ejemplo reemplazarán tus datos actuales. ¿Continuar?')) return;
       S = demoData();
       persist('Datos de ejemplo cargados');

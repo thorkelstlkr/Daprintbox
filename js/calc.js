@@ -19,26 +19,44 @@
     return num(filament.price) / weight;
   }
 
+  /**
+   * Parámetros de la impresora usada: los de `printer` si se indica
+   * ({ watts, price, lifeHours, maintenancePerHour }) o, si no, los de ajustes.
+   */
+  function printerParams(settings, printer) {
+    if (printer) {
+      return { watts: num(printer.watts), price: num(printer.price), lifeHours: num(printer.lifeHours), maintenancePerHour: num(printer.maintenancePerHour) };
+    }
+    return { watts: num(settings.printerWatts), price: num(settings.printerPrice), lifeHours: num(settings.printerLifeHours), maintenancePerHour: num(settings.maintenancePerHour) };
+  }
+
   /** Coste de amortización + mantenimiento de la impresora por hora. */
-  function machineHourCost(settings) {
-    const life = num(settings.printerLifeHours);
-    const amort = life > 0 ? num(settings.printerPrice) / life : 0;
-    return amort + num(settings.maintenancePerHour);
+  function machineHourCost(settings, printer) {
+    const p = printerParams(settings, printer);
+    const amort = p.lifeHours > 0 ? p.price / p.lifeHours : 0;
+    return amort + p.maintenancePerHour;
+  }
+
+  /** Coste por hora de impresión sin material: máquina + electricidad. */
+  function printerHourCost(settings, printer) {
+    const p = printerParams(settings, printer);
+    return machineHourCost(settings, printer) + (p.watts / 1000) * num(settings.kwhPrice);
   }
 
   /**
    * Desglose de coste de un trabajo de impresión.
    * job.items: [{ filamentId, grams }] — gramos totales del trabajo (todas las unidades).
    * job.hours: horas totales de impresión. job.quantity: piezas producidas.
+   * printer: impresora usada (opcional; sin ella se usan los valores de ajustes).
    */
-  function printCost(job, filamentsById, settings) {
+  function printCost(job, filamentsById, settings, printer) {
     const material = (job.items || []).reduce((sum, it) => {
       const f = filamentsById[it.filamentId];
       return sum + (f ? num(it.grams) * costPerGram(f) : 0);
     }, 0);
     const hours = num(job.hours);
-    const electricity = hours * (num(settings.printerWatts) / 1000) * num(settings.kwhPrice);
-    const machine = hours * machineHourCost(settings);
+    const electricity = hours * (printerParams(settings, printer).watts / 1000) * num(settings.kwhPrice);
+    const machine = hours * machineHourCost(settings, printer);
     const labor = num(job.laborHours) * num(settings.laborRate);
     const extras = num(job.extras);
     const failure = (material + electricity + machine) * (num(settings.failureRate) / 100);
@@ -70,6 +88,33 @@
     (sales || []).forEach((s) => {
       if (!s.printId) return;
       out[s.printId] = (out[s.printId] || 0) + num(s.quantity);
+    });
+    return out;
+  }
+
+  /**
+   * Uso y rentabilidad por impresora: horas, trabajos, unidades, coste de producción
+   * y, de las ventas ligadas a sus impresiones, ingresos y beneficio.
+   */
+  function printerStats(state) {
+    const out = {};
+    const row = (id) => (out[id] = out[id] || { hours: 0, jobs: 0, units: 0, cost: 0, revenue: 0, profit: 0 });
+    const printerOf = {};
+    (state.prints || []).forEach((p) => {
+      if (!p.printerId) return;
+      printerOf[p.id] = p.printerId;
+      const r = row(p.printerId);
+      r.hours += num(p.hours);
+      r.jobs += 1;
+      r.units += num(p.quantity);
+      r.cost += num(p.cost && p.cost.total);
+    });
+    (state.sales || []).forEach((s) => {
+      const id = printerOf[s.printId];
+      if (!id) return;
+      const t = saleTotals(s);
+      out[id].revenue += t.revenue;
+      out[id].profit += t.profit;
     });
     return out;
   }
@@ -140,8 +185,8 @@
   }
 
   const Calc = {
-    num, round2, costPerGram, machineHourCost, printCost, gramsByFilament,
-    soldByPrint, saleTotals, summary, lastMonths, monthlySeries,
+    num, round2, costPerGram, printerParams, machineHourCost, printerHourCost, printCost, gramsByFilament,
+    soldByPrint, printerStats, saleTotals, summary, lastMonths, monthlySeries,
   };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = Calc;

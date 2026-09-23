@@ -9,10 +9,12 @@
   const DEFAULT_SETTINGS = {
     currency: 'EUR',
     kwhPrice: 0.18,          // €/kWh
+    // Valores iniciales para una impresora nueva (y para migrar datos antiguos)
     printerWatts: 120,       // consumo medio en W
     printerPrice: 400,       // precio de la impresora
     printerLifeHours: 5000,  // horas de vida útil estimadas
     maintenancePerHour: 0.05,// boquillas, correas, lubricante... €/h
+    defaultPrinterId: '',    // impresora preseleccionada al registrar impresiones
     laborRate: 10,           // €/h de mano de obra (post-procesado, preparación)
     failureRate: 10,         // % extra por impresiones fallidas
     defaultMargin: 60,       // % de margen sobre coste para el precio sugerido
@@ -22,20 +24,47 @@
   const emptyState = () => ({
     version: 1,
     settings: { ...DEFAULT_SETTINGS },
+    printers: [],
     filaments: [],
     prints: [],
     sales: [],
     expenses: [],
   });
 
+  const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+
+  /** Impresora creada a partir de los valores de ajustes. */
+  const printerFromSettings = (settings, name) => ({
+    id: uid(),
+    name: name || 'Mi impresora',
+    watts: settings.printerWatts,
+    price: settings.printerPrice,
+    lifeHours: settings.printerLifeHours,
+    maintenancePerHour: settings.maintenancePerHour,
+    notes: '',
+  });
+
   function normalize(data) {
     const base = emptyState();
     if (!data || typeof data !== 'object') return base;
+    const settings = { ...DEFAULT_SETTINGS, ...(data.settings || {}) };
+    const prints = Array.isArray(data.prints) ? data.prints : [];
+    let printers = Array.isArray(data.printers) ? data.printers : [];
+    // Datos anteriores a las impresoras múltiples: la impresora de ajustes pasa a ser la primera.
+    if (!Array.isArray(data.printers) && (prints.length || data.settings)) {
+      const legacy = printerFromSettings(settings);
+      printers = [legacy];
+      settings.defaultPrinterId = legacy.id;
+      prints.forEach((p) => {
+        if (!p.printerId) { p.printerId = legacy.id; p.printerName = legacy.name; }
+      });
+    }
     return {
       version: 1,
-      settings: { ...DEFAULT_SETTINGS, ...(data.settings || {}) },
+      settings,
+      printers,
       filaments: Array.isArray(data.filaments) ? data.filaments : [],
-      prints: Array.isArray(data.prints) ? data.prints : [],
+      prints,
       sales: Array.isArray(data.sales) ? data.sales : [],
       expenses: Array.isArray(data.expenses) ? data.expenses : [],
     };
@@ -59,13 +88,11 @@
     }
   }
 
-  const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-
   const today = () => {
     const d = new Date();
     const pad = (n) => String(n).padStart(2, '0');
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
   };
 
-  root.Store = { load, save, normalize, emptyState, uid, today, DEFAULT_SETTINGS };
+  root.Store = { load, save, normalize, emptyState, uid, today, printerFromSettings, DEFAULT_SETTINGS };
 })(window);

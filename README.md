@@ -3,7 +3,8 @@
 Aplicación web para gestionar un pequeño negocio de impresión 3D:
 
 - **Filamentos** — stock de cada bobina (material, color, marca, precio, gramos restantes), aviso de stock bajo, reposiciones y valor del inventario.
-- **Impresiones** — calcula el coste real de cada pieza (material, electricidad, amortización y mantenimiento de la impresora, mano de obra, extras y margen por fallos), sugiere un precio de venta y descuenta automáticamente el filamento usado.
+- **Impresoras** — varias impresoras, cada una con su consumo, precio, vida útil y mantenimiento. Muestra su coste por hora, horas de uso, trabajos, ingresos y beneficio generado.
+- **Impresiones** — eliges la impresora y calcula el coste real de cada pieza (material, electricidad, amortización y mantenimiento de esa impresora, mano de obra, extras y margen por fallos), sugiere un precio de venta y descuenta automáticamente el filamento usado.
 - **Ventas** — registra cada venta ligada a una impresión (o libre), con comisiones y envío, y calcula beneficio y margen.
 - **Gastos** — compras de filamento (se añaden solas al comprar/reponer), repuestos, embalaje, etc.
 - **Resumen** — ingresos, beneficio de las ventas, gastos pagados, resultado de caja, gráfico mensual de ingresos vs. gastos, piezas más rentables y piezas fabricadas pendientes de vender.
@@ -22,13 +23,15 @@ También funciona publicada en GitHub Pages tal cual.
 
 Los datos se guardan en el `localStorage` del navegador. Desde **Ajustes** puedes exportar/importar una copia de seguridad en JSON, exportar ventas, gastos y filamentos a CSV (compatible con Excel) y cargar datos de ejemplo para probarla.
 
+Si ya usabas la versión anterior, la impresora que tenías en Ajustes se convierte automáticamente en tu primera impresora y las impresiones existentes quedan asignadas a ella.
+
 ## Cómo se calcula el coste
 
 | Concepto | Fórmula |
 |---|---|
 | Material | gramos × (precio bobina ÷ peso bobina) |
-| Electricidad | horas × (W ÷ 1000) × precio kWh |
-| Máquina | horas × (precio impresora ÷ vida útil + mantenimiento/h) |
+| Electricidad | horas × (W de la impresora ÷ 1000) × precio kWh |
+| Máquina | horas × (precio de la impresora ÷ vida útil + mantenimiento/h) |
 | Mano de obra | horas de trabajo × tarifa/h |
 | Fallos | % sobre material + electricidad + máquina |
 | Precio sugerido | coste por unidad × (1 + margen %) |
