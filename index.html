@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Daprintbox</title>
+  <meta name="description" content="Stock de filamentos, costes de impresión 3D y ventas.">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo" aria-hidden="true">▣</span>
+      <span>Daprintbox</span>
+    </div>
+    <nav class="tabs" role="tablist" aria-label="Secciones">
+      <button role="tab" data-view="dashboard">Resumen</button>
+      <button role="tab" data-view="filaments">Filamentos</button>
+      <button role="tab" data-view="prints">Impresiones</button>
+      <button role="tab" data-view="sales">Ventas</button>
+      <button role="tab" data-view="expenses">Gastos</button>
+      <button role="tab" data-view="settings">Ajustes</button>
+    </nav>
+  </header>
+
+  <main id="view" tabindex="-1"></main>
+
+  <dialog id="modal">
+    <form method="dialog" id="modal-form" novalidate>
+      <header class="modal-head">
+        <h2 id="modal-title"></h2>
+        <button type="button" class="icon-btn" data-close aria-label="Cerrar">✕</button>
+      </header>
+      <div id="modal-body"></div>
+      <footer class="modal-foot">
+        <button type="button" class="btn ghost" data-close>Cancelar</button>
+        <button type="submit" class="btn primary" id="modal-submit">Guardar</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <div id="toast" role="status" aria-live="polite"></div>
+
+  <script src="js/calc.js"></script>
+  <script src="js/store.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

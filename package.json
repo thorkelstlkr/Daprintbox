@@ -1,0 +1,11 @@
+{
+  "name": "daprintbox",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Control de stock de filamentos 3D, costes de impresión y ventas",
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "start": "python3 -m http.server 8080"
+  },
+  "license": "MIT"
+}
