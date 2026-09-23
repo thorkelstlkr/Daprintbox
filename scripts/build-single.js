@@ -14,8 +14,11 @@ const body = html.match(/<body>([\s\S]*?)<\/body>/)[1];
 
 const title = head.match(/<title>[\s\S]*?<\/title>/)[0];
 const css = read('css/styles.css');
+// La versión de un solo archivo guarda en el navegador: sin configuración ni cliente del servidor
+const SERVER_ONLY = ['js/config.js', 'js/remote.js'];
 const markup = body
-  .replace(/\s*<script src="([^"]+)"><\/script>/g, (_, src) => `\n<script>\n${read(src).replace(/<\/script/gi, '<\\/script')}\n</script>`);
+  .replace(/\s*<script src="([^"]+)"><\/script>/g, (_, src) => (SERVER_ONLY.includes(src) ? ''
+    : `\n<script>\n${read(src).replace(/<\/script/gi, '<\\/script')}\n</script>`));
 
 const out = `${title}\n<style>\n${css}\n</style>\n${markup.trim()}\n`;
 fs.mkdirSync(path.join(root, 'dist'), { recursive: true });
