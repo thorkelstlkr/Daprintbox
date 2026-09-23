@@ -13,6 +13,7 @@
   --accent-ink: #ffffff;
   --series-1: #2a78d6;
   --series-2: #eb6834;
+  --series-3: #008300;
   --good: #006300;
   --good-mark: #0ca30c;
   --warning: #fab219;
@@ -35,6 +36,7 @@
     --accent: #3987e5;
     --series-1: #3987e5;
     --series-2: #d95926;
+    --series-3: #0ca30c;
     --good: #0ca30c;
     --shadow: none;
   }
@@ -53,6 +55,7 @@
   --accent: #3987e5;
   --series-1: #3987e5;
   --series-2: #d95926;
+  --series-3: #0ca30c;
   --good: #0ca30c;
   --shadow: none;
 }
@@ -172,6 +175,7 @@ tfoot td { font-weight: 700; border-top: 1px solid var(--axis); }
 
 .items-list { display: flex; flex-direction: column; gap: 8px; }
 .item-row, .comp-row { display: grid; grid-template-columns: 1fr 110px auto; gap: 8px; align-items: center; }
+.sheet-row { display: grid; grid-template-columns: 1fr 90px 90px auto; gap: 8px; align-items: center; }
 
 /* ---------- Gráfico ---------- */
 .chart { position: relative; }
@@ -229,6 +233,7 @@ dialog::backdrop { background: rgba(0, 0, 0, .45); }
 @media (max-width: 640px) {
   .topbar { flex-direction: column; align-items: stretch; gap: 6px; padding-bottom: 6px; }
   .item-row, .comp-row { grid-template-columns: 1fr 90px auto; }
+  .sheet-row { grid-template-columns: 1fr 70px 70px auto; }
   .kpi .value { font-size: 1.25rem; }
 }
 
@@ -246,3 +251,9 @@ dl.breakdown { margin: 0; column-gap: 0; }
 .demo-banner b { color: var(--ink); }
 #modal-body p { margin: 0 0 8px; }
 textarea { resize: vertical; }
+
+/* Tipo de trabajo: color de identidad + etiqueta de texto (nunca solo color) */
+.badge[class*="kind-"]::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.badge.kind-3d::before { background: var(--series-1); }
+.badge.kind-laser::before { background: var(--series-2); }
+.badge.kind-sello::before { background: var(--series-3); }

@@ -39,6 +39,33 @@
     return out;
   }
 
+  /** Coste por cm² de un material en plancha (precio ÷ área de la plancha). */
+  function sheetCostPerCm2(material) {
+    const area = (num(material && material.sheetWidth) * num(material && material.sheetHeight)) / 100;
+    return area > 0 ? num(material.price) / area : 0;
+  }
+
+  /** cm² que consume una fila de plancha (medidas por pieza en mm) incluyendo el desperdicio. */
+  const sheetAreaCm2 = (it, quantity, wastePct) =>
+    ((num(it.width) * num(it.height)) / 100) * quantity * (1 + num(wastePct) / 100);
+
+  /**
+   * Planchas consumidas por material.
+   * sheets: [{ materialId, width, height }] con medidas en mm de cada pieza.
+   */
+  function sheetsUsed(sheets, quantity, wastePct, materialsById) {
+    const out = {};
+    const q = Math.max(1, Math.floor(num(quantity)) || 1);
+    (sheets || []).forEach((it) => {
+      const m = materialsById && materialsById[it.materialId];
+      if (!m) return;
+      const sheetArea = (num(m.sheetWidth) * num(m.sheetHeight)) / 100;
+      if (sheetArea <= 0) return;
+      out[m.id] = (out[m.id] || 0) + sheetAreaCm2(it, q, wastePct) / sheetArea;
+    });
+    return out;
+  }
+
   /**
    * Parámetros de la impresora usada: los de `printer` si se indica
    * ({ watts, price, lifeHours, maintenancePerHour }) o, si no, los de ajustes.
@@ -71,8 +98,10 @@
    * job.components: [{ componentId, qty, unitCost }] — piezas externas por unidad producida
    * (portalámparas, LED, imanes…). Se valoran al precio actual del componente o, si ya no
    * existe, al unitCost guardado. No se les aplica el margen de fallos.
+   * job.sheets: [{ materialId, width, height, costPerCm2 }] — material en plancha (láser, sellos)
+   * con las medidas de cada pieza en mm; se suma el % de desperdicio de ajustes (settings.sheetWaste).
    */
-  function printCost(job, filamentsById, settings, printer, componentsById) {
+  function printCost(job, filamentsById, settings, printer, componentsById, materialsById) {
     const material = (job.items || []).reduce((sum, it) => {
       const f = filamentsById[it.filamentId];
       return sum + (f ? num(it.grams) * costPerGram(f) : 0);
@@ -87,12 +116,16 @@
       const c = componentsById && componentsById[it.componentId];
       return sum + num(it.qty) * quantity * (c ? componentUnitCost(c) : num(it.unitCost));
     }, 0);
-    const failure = (material + electricity + machine) * (num(settings.failureRate) / 100);
-    const total = material + electricity + machine + components + labor + extras + failure;
+    const sheet = (job.sheets || []).reduce((sum, it) => {
+      const m = materialsById && materialsById[it.materialId];
+      return sum + sheetAreaCm2(it, quantity, settings.sheetWaste) * (m ? sheetCostPerCm2(m) : num(it.costPerCm2));
+    }, 0);
+    const failure = (material + sheet + electricity + machine) * (num(settings.failureRate) / 100);
+    const total = material + sheet + electricity + machine + components + labor + extras + failure;
     const unit = total / quantity;
     const margin = job.margin === undefined || job.margin === '' ? num(settings.defaultMargin) : num(job.margin);
     return {
-      material, electricity, machine, components, labor, extras, failure, total,
+      material, sheet, electricity, machine, components, labor, extras, failure, total,
       quantity, unit,
       suggestedUnitPrice: unit * (1 + margin / 100),
       margin,
@@ -142,6 +175,28 @@
       const t = saleTotals(s);
       out[id].revenue += t.revenue;
       out[id].profit += t.profit;
+    });
+    return out;
+  }
+
+  /** Trabajos, ingresos y beneficio por tipo de trabajo ('3d', 'laser', 'sello'; ventas libres en 'otros'). */
+  function kindStats(state, from, to) {
+    const out = {};
+    const row = (k) => (out[k] = out[k] || { jobs: 0, units: 0, revenue: 0, profit: 0 });
+    const kindOf = {};
+    (state.prints || []).forEach((p) => {
+      const k = p.kind || '3d';
+      kindOf[p.id] = k;
+      if (!inRange(p.date, from, to)) return;
+      row(k).jobs += 1;
+      row(k).units += num(p.quantity);
+    });
+    (state.sales || []).forEach((s) => {
+      if (!inRange(s.date, from, to)) return;
+      const t = saleTotals(s);
+      const r = row(kindOf[s.printId] || 'otros');
+      r.revenue += t.revenue;
+      r.profit += t.profit;
     });
     return out;
   }
@@ -212,7 +267,7 @@
   }
 
   const Calc = {
-    num, round2, costPerGram, componentUnitCost, componentsUsed, printerParams, machineHourCost, printerHourCost, printCost, gramsByFilament,
+    num, round2, costPerGram, componentUnitCost, componentsUsed, sheetCostPerCm2, sheetsUsed, kindStats, printerParams, machineHourCost, printerHourCost, printCost, gramsByFilament,
     soldByPrint, printerStats, saleTotals, summary, lastMonths, monthlySeries,
   };
 

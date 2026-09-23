@@ -19,6 +19,7 @@
     failureRate: 10,         // % extra por impresiones fallidas
     defaultMargin: 60,       // % de margen sobre coste para el precio sugerido
     lowStockGrams: 200,      // aviso de stock bajo por defecto
+    sheetWaste: 15,          // % de plancha que se pierde (márgenes, kerf, recortes)
   };
 
   const emptyState = () => ({
@@ -27,6 +28,7 @@
     printers: [],
     filaments: [],
     components: [],
+    materials: [],
     prints: [],
     sales: [],
     expenses: [],
@@ -67,6 +69,7 @@
       printers,
       filaments: Array.isArray(data.filaments) ? data.filaments : [],
       components: Array.isArray(data.components) ? data.components : [],
+      materials: Array.isArray(data.materials) ? data.materials : [],
       prints,
       sales: Array.isArray(data.sales) ? data.sales : [],
       expenses: Array.isArray(data.expenses) ? data.expenses : [],

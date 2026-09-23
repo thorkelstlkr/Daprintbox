@@ -110,3 +110,33 @@ test('componentes externos por pieza entran en el coste', () => {
   close(gone.components, 3 * 2 * 1.5);
   assert.deepEqual(Calc.componentsUsed(job.components, 3), { led: 3, iman: 12 });
 });
+
+test('material en plancha: coste por cm² con desperdicio y planchas usadas', () => {
+  const mats = { mdf: { id: 'mdf', price: 6, sheetWidth: 600, sheetHeight: 400 } }; // 2400 cm² → 0,0025 €/cm²
+  close(Calc.sheetCostPerCm2(mats.mdf), 0.0025);
+  const s2 = { ...settings, sheetWaste: 20 };
+  const job = { items: [], hours: 0, quantity: 4, sheets: [{ materialId: 'mdf', width: 100, height: 100 }] }; // 100 cm²/pieza
+  const c = Calc.printCost(job, fil, s2, null, {}, mats);
+  close(c.sheet, 100 * 4 * 1.2 * 0.0025);
+  close(c.failure, c.sheet * 0.1);
+  const used = Calc.sheetsUsed(job.sheets, 4, 20, mats);
+  close(used.mdf, 480 / 2400);
+  // material eliminado: usa el coste por cm² guardado
+  const gone = Calc.printCost({ ...job, sheets: [{ materialId: 'x', width: 100, height: 100, costPerCm2: 0.01 }] }, fil, s2, null, {}, mats);
+  close(gone.sheet, 480 * 0.01);
+});
+
+test('resultados por tipo de trabajo', () => {
+  const state = {
+    prints: [{ id: 'a', kind: 'laser', date: '2026-01-02', quantity: 3 }, { id: 'b', date: '2026-01-03', quantity: 1 }],
+    sales: [
+      { printId: 'a', date: '2026-01-05', quantity: 2, unitPrice: 10, fees: 1, unitCost: 2 },
+      { printId: 'b', date: '2026-01-05', quantity: 1, unitPrice: 5, fees: 0, unitCost: 1 },
+      { printId: null, date: '2026-01-06', quantity: 1, unitPrice: 7, fees: 0, unitCost: 0 },
+    ],
+  };
+  const k = Calc.kindStats(state);
+  assert.deepEqual(k.laser, { jobs: 1, units: 3, revenue: 20, profit: 15 });
+  assert.deepEqual(k['3d'], { jobs: 1, units: 1, revenue: 5, profit: 4 });
+  assert.equal(k.otros.revenue, 7);
+});

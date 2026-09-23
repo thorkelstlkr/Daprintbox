@@ -8,7 +8,7 @@
   const { uid, today } = window.Store;
 
   let S = window.Store.load();
-  const ui = { period: 'month', salesPeriod: 'all', expensesPeriod: 'all', filamentQuery: '' };
+  const ui = { kind: 'all', period: 'month', salesPeriod: 'all', expensesPeriod: 'all', filamentQuery: '' };
 
   const $ = (sel, el = document) => el.querySelector(sel);
   const $$ = (sel, el = document) => Array.from(el.querySelectorAll(sel));
@@ -41,6 +41,18 @@
   const filamentsById = () => Object.fromEntries(S.filaments.map((f) => [f.id, f]));
   const findPrinter = (id) => S.printers.find((x) => x.id === id);
   const componentsById = () => Object.fromEntries(S.components.map((c) => [c.id, c]));
+  const materialsById = () => Object.fromEntries(S.materials.map((m) => [m.id, m]));
+  const { sheetCostPerCm2, sheetsUsed } = window.Calc;
+  const matLow = (m) => num(m.stock) <= (m.lowStock === '' || m.lowStock == null ? 0 : num(m.lowStock));
+  const fmtSheets = (n) => `${fmtNum(n, 2)} ${Math.abs(num(n) - 1) < 1e-9 ? 'plancha' : 'planchas'}`;
+  const materialLabel = (m) => `${m.name}${m.thickness ? ' ' + fmtNum(m.thickness, 1) + ' mm' : ''}`;
+
+  // Tipos de trabajo y de máquina
+  const KINDS = { '3d': 'Impresión 3D', laser: 'Corte y grabado láser', sello: 'Sello personalizado' };
+  const KIND_SHORT = { '3d': '3D', laser: 'Láser', sello: 'Sello', otros: 'Otras ventas' };
+  const MACHINE_TYPES = { '3d': 'Impresora 3D', laser: 'Láser', otra: 'Otra' };
+  const machineType = (m) => (m && m.type) || '3d';
+  const machineForKind = (kind) => (kind === '3d' ? '3d' : 'laser');
   const { componentUnitCost, componentsUsed } = window.Calc;
   const compLow = (c) => num(c.stock) <= (c.lowStock === '' || c.lowStock == null ? 0 : num(c.lowStock));
   const fmtQty = (q, unit) => `${fmtNum(q, 2)} ${unit || 'ud.'}`;
@@ -111,6 +123,21 @@
     });
   }
 
+  /** Suma (sign=+1) o descuenta (sign=-1) del stock las planchas de un trabajo. */
+  function applySheetStock(sheets, quantity, sign) {
+    const byId = materialsById();
+    Object.entries(sheetsUsed(sheets, quantity, S.settings.sheetWaste, byId)).forEach(([id, n]) => {
+      byId[id].stock = Math.round((num(byId[id].stock) + sign * n) * 1000) / 1000;
+    });
+  }
+
+  /** Aplica al stock todo lo que consume un trabajo (filamento, planchas y componentes). */
+  function applyJobStock(job, sign) {
+    applyStock(job.items, sign);
+    applySheetStock(job.sheets, job.quantity, sign);
+    applyComponentStock(job.components, job.quantity, sign);
+  }
+
   function applyStock(items, sign) {
     const byId = filamentsById();
     Object.entries(gramsByFilament(items)).forEach(([id, g]) => {
@@ -178,6 +205,10 @@
     const stockValue = S.filaments.reduce((s, f) => s + Math.max(0, num(f.remaining)) * costPerGram(f), 0);
     const low = S.filaments.filter(isLow);
     const lowComps = S.components.filter(compLow);
+    const lowMats = S.materials.filter(matLow);
+    const matValue = S.materials.reduce((s, m) => s + Math.max(0, num(m.stock)) * num(m.price), 0);
+    const kinds = window.Calc.kindStats(S, from, to);
+    const kindRows = ['3d', 'laser', 'sello', 'otros'].filter((k) => kinds[k] && (kinds[k].jobs || kinds[k].revenue));
     const compValue = S.components.reduce((s, c) => s + Math.max(0, num(c.stock)) * componentUnitCost(c), 0);
 
     const months = lastMonths(today().slice(0, 7), 12);
@@ -210,8 +241,8 @@
         <div class="filters">${periodSelect('period', ui.period)}</div>
       </div>
       ${empty ? `<div class="card"><h2>Bienvenido 👋</h2>
-        <p>Empieza añadiendo tus <b>impresoras</b> y tus <b>filamentos</b> (con su precio y stock), registra cada <b>impresión</b> para calcular su coste y descontar el material, y apunta tus <b>ventas</b> para ver tu beneficio real.</p>
-        <div class="filters"><button class="btn primary" data-action="new-printer">Añadir impresora</button>
+        <p>Empieza añadiendo tus <b>máquinas</b> (impresoras 3D, láser) y tus <b>materiales</b> (filamento, planchas, componentes), registra cada <b>trabajo</b> —impresión 3D, corte o grabado láser, sello— para calcular su coste y descontar el material, y apunta tus <b>ventas</b> para ver tu beneficio real.</p>
+        <div class="filters"><button class="btn primary" data-action="new-printer">Añadir máquina</button>
         <button class="btn" data-action="new-filament">Añadir filamento</button>
         <button class="btn" data-action="load-demo">Cargar datos de ejemplo</button></div></div>` : ''}
       <div class="kpis">
@@ -223,8 +254,8 @@
           <div class="sub">Filamento ${money(r.filamentSpend)} · otros ${money(r.otherSpend)}</div></div>
         <div class="kpi"><div class="label">Resultado de caja</div><div class="value">${moneySigned(r.cashResult)}</div>
           <div class="sub">Ingresos − comisiones − gastos</div></div>
-        <div class="kpi"><div class="label">Stock de filamento</div><div class="value">${fmtGrams(stockGrams)}</div>
-          <div class="sub">Valor ${money(stockValue)} · ${S.filaments.length} bobinas${S.components.length ? ` · componentes ${money(compValue)}` : ''}</div></div>
+        <div class="kpi"><div class="label">Stock de filamento y material</div><div class="value">${fmtGrams(stockGrams)}</div>
+          <div class="sub">Valor ${money(stockValue)} · ${S.filaments.length} bobinas${S.materials.length ? ` · planchas ${money(matValue)}` : ''}${S.components.length ? ` · componentes ${money(compValue)}` : ''}</div></div>
       </div>
 
       <div class="card">
@@ -235,14 +266,17 @@
       <div class="grid grid-2">
         <div class="card">
           <h2>Stock bajo</h2>
-          ${low.length || lowComps.length ? `<ul class="alert-list">${low.map((f) => `
+          ${low.length || lowComps.length || lowMats.length ? `<ul class="alert-list">${low.map((f) => `
             <li><span><span class="swatch" style="background:${esc(f.color || '#999')}"></span>${esc(filamentLabel(f))}</span>
               <span class="nowrap"><span class="badge low">⚠ ${fmtGrams(f.remaining)}</span>
               <button class="btn small" data-action="restock" data-id="${f.id}">Reponer</button></span></li>`).join('')}${lowComps.map((c) => `
             <li><span>🔩 ${esc(c.name)}</span>
               <span class="nowrap"><span class="badge low">⚠ ${fmtQty(c.stock, c.unit)}</span>
-              <button class="btn small" data-action="restock-component" data-id="${c.id}">Reponer</button></span></li>`).join('')}</ul>`
-            : `<p class="muted">✓ Filamentos y componentes por encima del mínimo.</p>`}
+              <button class="btn small" data-action="restock-component" data-id="${c.id}">Reponer</button></span></li>`).join('')}${lowMats.map((m) => `
+            <li><span>▭ ${esc(materialLabel(m))}</span>
+              <span class="nowrap"><span class="badge low">⚠ ${fmtSheets(m.stock)}</span>
+              <button class="btn small" data-action="restock-material" data-id="${m.id}">Reponer</button></span></li>`).join('')}</ul>`
+            : `<p class="muted">✓ Filamentos, planchas y componentes por encima del mínimo.</p>`}
         </div>
         <div class="card">
           <h2>Piezas más rentables · ${PERIODS[ui.period].toLowerCase()}</h2>
@@ -251,6 +285,17 @@
             <tbody>${top.map((t) => `<tr><td>${esc(t.name)}</td><td class="num">${fmtNum(t.units)}</td><td class="num">${money(t.revenue)}</td><td class="num">${moneySigned(t.profit)}</td></tr>`).join('')}</tbody>
           </table></div>` : `<p class="muted">Sin ventas en este periodo.</p>`}
         </div>
+      </div>
+
+      <div class="card">
+        <h2>Por línea de negocio · ${PERIODS[ui.period].toLowerCase()}</h2>
+        ${kindRows.length ? `<div class="table-wrap"><table>
+          <thead><tr><th>Línea</th><th class="num">Trabajos</th><th class="num">Uds. fabricadas</th><th class="num">Ingresos</th><th class="num">Beneficio</th><th class="num">Margen</th></tr></thead>
+          <tbody>${kindRows.map((k) => { const r = kinds[k]; return `<tr><td><span class="badge kind-${k}">${esc(KIND_SHORT[k])}</span></td>
+            <td class="num">${k === 'otros' ? '—' : fmtNum(r.jobs)}</td><td class="num">${k === 'otros' ? '—' : fmtNum(r.units)}</td>
+            <td class="num">${money(r.revenue)}</td><td class="num">${moneySigned(r.profit)}</td>
+            <td class="num">${r.revenue > 0 ? fmtNum((r.profit / r.revenue) * 100) + ' %' : '—'}</td></tr>`; }).join('')}</tbody>
+        </table></div>` : `<p class="muted">Sin trabajos ni ventas en este periodo.</p>`}
       </div>
 
       <div class="card">
@@ -467,9 +512,126 @@
     });
   }
 
+  // ================================================================ MATERIALES EN PLANCHA
+
+  const MATERIAL_CATEGORIES = ['Madera', 'Contrachapado', 'MDF', 'Metacrilato', 'Cuero', 'Goma para sellos', 'Cartón', 'Corcho', 'Tela', 'Papel', 'Vidrio', 'Metal', 'Otros'];
+
+  function viewMaterials() {
+    const list = [...S.materials].sort((a, b) => (a.category || '').localeCompare(b.category || '') || a.name.localeCompare(b.name));
+    const used = {};
+    S.prints.forEach((p) => Object.entries(sheetsUsed(p.sheets, p.quantity, S.settings.sheetWaste, materialsById()))
+      .forEach(([id, n]) => { used[id] = (used[id] || 0) + n; }));
+    const total = list.reduce((s, m) => s + Math.max(0, num(m.stock)) * num(m.price), 0);
+    return `
+      <div class="page-head">
+        <h1>Materiales en plancha</h1>
+        <div class="actions"><button class="btn primary" data-action="new-material">+ Nuevo material</button></div>
+      </div>
+      <p class="small muted" style="margin-top:-8px">Para corte y grabado láser y sellos: madera, MDF, metacrilato, cuero, goma para sellos… El coste se calcula por cm² según las medidas de cada pieza, más un ${fmtNum(S.settings.sheetWaste)} % de desperdicio (cámbialo en Ajustes).</p>
+      <div class="card">
+        ${list.length ? `<div class="table-wrap"><table>
+          <thead><tr><th>Material</th><th class="num">Plancha</th><th class="num">Precio</th><th class="num">€/cm²</th><th class="num">Stock</th><th class="num">Usado</th><th class="num">Valor</th><th></th></tr></thead>
+          <tbody>${list.map((m) => `<tr>
+            <td><b>${esc(materialLabel(m))}</b><div class="small muted">${esc([m.category, m.supplier].filter(Boolean).join(' · '))}</div></td>
+            <td class="num">${fmtNum(m.sheetWidth)} × ${fmtNum(m.sheetHeight)} mm</td>
+            <td class="num">${money(m.price)}</td>
+            <td class="num"><b>${money(sheetCostPerCm2(m) * 100).replace(/\s?€/, '')}</b><div class="small muted">€ / 100 cm²</div></td>
+            <td class="num">${fmtSheets(m.stock)}${matLow(m) ? '<div><span class="badge low">⚠ Stock bajo</span></div>' : ''}</td>
+            <td class="num">${fmtNum(used[m.id] || 0, 2)}</td>
+            <td class="num">${money(Math.max(0, num(m.stock)) * num(m.price))}</td>
+            <td class="actions">
+              <button class="btn small" data-action="restock-material" data-id="${m.id}">Reponer</button>
+              <button class="icon-btn" data-action="edit-material" data-id="${m.id}" aria-label="Editar" title="Editar / ajustar stock">✎</button>
+              <button class="icon-btn" data-action="delete-material" data-id="${m.id}" aria-label="Eliminar" title="Eliminar">🗑</button>
+            </td></tr>`).join('')}</tbody>
+          <tfoot><tr><td colspan="6">Total</td><td class="num">${money(total)}</td><td></td></tr></tfoot>
+        </table></div>` : `<div class="empty">Aún no tienes materiales en plancha. Añade, por ejemplo, contrachapado de 3 mm o goma para sellos.</div>`}
+      </div>`;
+  }
+
+  function materialForm(m) {
+    const isNew = !m;
+    m = m || { name: '', category: 'Contrachapado', thickness: 3, sheetWidth: 600, sheetHeight: 400, price: '', stock: '', lowStock: 1, supplier: '' };
+    openModal({
+      title: isNew ? 'Nuevo material' : 'Editar material',
+      body: `<div class="form-grid">
+        ${field('Nombre *', inp('name', m.name, 'required placeholder="Ej. Contrachapado de abedul"'), { wide: true })}
+        ${field('Categoría', inp('category', m.category, 'list="mat-cats"') + `<datalist id="mat-cats">${MATERIAL_CATEGORIES.map((x) => `<option value="${x}">`).join('')}</datalist>`)}
+        ${field('Grosor (mm)', numInp('thickness', m.thickness, 'min="0"'))}
+        ${field('Ancho plancha (mm) *', numInp('sheetWidth', m.sheetWidth, 'required min="1"'))}
+        ${field('Alto plancha (mm) *', numInp('sheetHeight', m.sheetHeight, 'required min="1"'), { hint: 'A4 = 297 × 210 mm.' })}
+        ${field('Precio por plancha *', numInp('price', m.price, 'required min="0"'))}
+        ${isNew
+          ? field('Nº de planchas compradas', numInp('sheets', 1, 'min="0"'))
+          : field('Stock (planchas)', numInp('stock', m.stock), { hint: 'Admite decimales: 0,5 = media plancha.' })}
+        ${field('Aviso de stock bajo (planchas)', numInp('lowStock', m.lowStock, 'min="0"'))}
+        ${field('Proveedor', inp('supplier', m.supplier))}
+        ${isNew ? `${field('Fecha de compra', `<input type="date" name="date" value="${today()}">`)}
+          <div class="field wide"><label class="check"><input type="checkbox" name="asExpense" checked> Registrar la compra como gasto</label></div>` : ''}
+      </div>
+      <div class="price-box" id="mat-preview"></div>`,
+      onOpen: (b) => {
+        const refresh = () => {
+          const x = { price: val(b, 'price'), sheetWidth: val(b, 'sheetWidth'), sheetHeight: val(b, 'sheetHeight') };
+          const cm2 = sheetCostPerCm2(x);
+          $('#mat-preview', b).innerHTML = `<div><div class="small muted">Área de la plancha</div><strong>${fmtNum((num(x.sheetWidth) * num(x.sheetHeight)) / 100)} cm²</strong></div>
+            <div><div class="small muted">Coste por 100 cm² (10×10 cm)</div><strong>${money(cm2 * 100)}</strong></div>`;
+        };
+        b.addEventListener('input', refresh);
+        refresh();
+      },
+      onSubmit: (b) => {
+        const data = {
+          name: val(b, 'name'), category: val(b, 'category'), thickness: num(val(b, 'thickness')),
+          sheetWidth: num(val(b, 'sheetWidth')), sheetHeight: num(val(b, 'sheetHeight')), price: num(val(b, 'price')),
+          lowStock: val(b, 'lowStock'), supplier: val(b, 'supplier'),
+        };
+        if (data.sheetWidth <= 0 || data.sheetHeight <= 0) { toast('Indica las medidas de la plancha.'); return false; }
+        if (isNew) {
+          const n = num(val(b, 'sheets'));
+          const nm = { id: uid(), ...data, stock: n };
+          S.materials.push(nm);
+          if (checked(b, 'asExpense') && n > 0) {
+            S.expenses.push({ id: uid(), date: val(b, 'date') || today(), category: 'materiales', description: `${fmtSheets(n)} · ${materialLabel(nm)}`, amount: n * data.price, materialId: nm.id });
+          }
+          persist('Material añadido');
+        } else {
+          Object.assign(m, data, { stock: num(val(b, 'stock')) });
+          S.prints.forEach((p) => (p.sheets || []).forEach((it) => { if (it.materialId === m.id) it.materialName = materialLabel(m); }));
+          persist('Material actualizado');
+        }
+      },
+    });
+  }
+
+  function restockMaterialForm(m) {
+    openModal({
+      title: `Reponer · ${materialLabel(m)}`,
+      submitLabel: 'Añadir al stock',
+      body: `<div class="form-grid">
+        ${field('Nº de planchas', numInp('sheets', 1, 'required min="0"'))}
+        ${field('Importe pagado', numInp('amount', m.price, 'min="0"'))}
+        ${field('Fecha', `<input type="date" name="date" value="${today()}">`)}
+        <div class="field wide"><label class="check"><input type="checkbox" name="asExpense" checked> Registrar como gasto</label></div>
+      </div>
+      <p class="small muted">Stock actual: ${fmtSheets(m.stock)}</p>`,
+      onOpen: (b) => {
+        $('[name="sheets"]', b).addEventListener('input', (e) => { $('[name="amount"]', b).value = Math.round(num(e.target.value) * num(m.price) * 100) / 100; });
+      },
+      onSubmit: (b) => {
+        const n = num(val(b, 'sheets')), amount = num(val(b, 'amount'));
+        m.stock = num(m.stock) + n;
+        if (checked(b, 'asExpense') && amount > 0) {
+          S.expenses.push({ id: uid(), date: val(b, 'date') || today(), category: 'materiales', description: `Reposición ${fmtSheets(n)} · ${materialLabel(m)}`, amount, materialId: m.id });
+        }
+        persist(`+${fmtSheets(n)} de ${m.name}`);
+      },
+    });
+  }
+
   // ================================================================ COMPONENTES
 
-  const COMPONENT_CATEGORIES = ['Iluminación', 'Electrónica', 'Tornillería', 'Imanes', 'Cables', 'Llaveros y anillas', 'Embalaje', 'Otros'];
+  const COMPONENT_CATEGORIES = ['Iluminación', 'Electrónica', 'Tornillería', 'Imanes', 'Cables', 'Llaveros y anillas', 'Sellos', 'Embalaje', 'Otros'];
 
   function viewComponents() {
     const list = [...S.components].sort((a, b) => (a.category || '').localeCompare(b.category || '') || a.name.localeCompare(b.name));
@@ -584,19 +746,19 @@
     });
   }
 
-  // ================================================================ IMPRESORAS
+  // ================================================================ MÁQUINAS (impresoras 3D, láser…)
 
   function viewPrinters() {
     const stats = window.Calc.printerStats(S);
     const dp = defaultPrinter();
     return `
       <div class="page-head">
-        <h1>Impresoras</h1>
-        <div class="actions"><button class="btn primary" data-action="new-printer">+ Nueva impresora</button></div>
+        <h1>Máquinas</h1>
+        <div class="actions"><button class="btn primary" data-action="new-printer">+ Nueva máquina</button></div>
       </div>
       <div class="card">
         ${S.printers.length ? `<div class="table-wrap"><table>
-          <thead><tr><th>Impresora</th><th class="num">Consumo</th><th class="num">Precio</th><th class="num">Coste / hora</th>
+          <thead><tr><th>Máquina</th><th class="num">Consumo</th><th class="num">Precio</th><th class="num">Coste / hora</th>
             <th>Vida útil usada</th><th class="num">Trabajos</th><th class="num">Ingresos</th><th class="num">Beneficio</th><th></th></tr></thead>
           <tbody>${S.printers.map((pr) => {
             const st = stats[pr.id] || { hours: 0, jobs: 0, revenue: 0, profit: 0 };
@@ -604,7 +766,7 @@
             const pct = life > 0 ? Math.min(100, (st.hours / life) * 100) : 0;
             const isDefault = dp && dp.id === pr.id;
             return `<tr>
-              <td><b>${esc(pr.name)}</b> ${isDefault ? '<span class="badge ok">★ Predeterminada</span>' : ''}
+              <td><b>${esc(pr.name)}</b> <span class="badge">${esc(MACHINE_TYPES[machineType(pr)])}</span> ${isDefault ? '<span class="badge ok">★ Predeterminada</span>' : ''}
                 ${pr.notes ? `<div class="small muted">${esc(pr.notes)}</div>` : ''}</td>
               <td class="num">${fmtNum(pr.watts)} W</td>
               <td class="num">${money(pr.price)}</td>
@@ -621,26 +783,27 @@
                 <button class="icon-btn" data-action="delete-printer" data-id="${pr.id}" aria-label="Eliminar" title="Eliminar">🗑</button>
               </td></tr>`;
           }).join('')}</tbody>
-        </table></div>` : `<div class="empty">Añade tus impresoras para que cada impresión use su propio consumo, amortización y mantenimiento.</div>`}
+        </table></div>` : `<div class="empty">Añade tus impresoras 3D y máquinas láser para que cada trabajo use su propio consumo, amortización y mantenimiento.</div>`}
       </div>
-      <p class="small muted">Coste / hora = amortización (precio ÷ vida útil) + mantenimiento + electricidad (consumo × ${money(S.settings.kwhPrice)}/kWh). Ingresos y beneficio salen de las ventas de piezas impresas en cada impresora. Cambiar una impresora no modifica el coste de impresiones ya registradas.</p>`;
+      <p class="small muted">Coste / hora = amortización (precio ÷ vida útil) + mantenimiento + electricidad (consumo × ${money(S.settings.kwhPrice)}/kWh). Ingresos y beneficio salen de las ventas de los trabajos hechos en cada máquina. Cambiar una máquina no modifica el coste de trabajos ya registrados. «Predeterminada» es la que se elige por defecto para impresión 3D.</p>`;
   }
 
   function printerForm(pr) {
     const isNew = !pr;
     const st = S.settings;
-    pr = pr || { name: '', notes: '', watts: st.printerWatts, price: st.printerPrice, lifeHours: st.printerLifeHours, maintenancePerHour: st.maintenancePerHour };
+    pr = pr || { type: '3d', name: '', notes: '', watts: st.printerWatts, price: st.printerPrice, lifeHours: st.printerLifeHours, maintenancePerHour: st.maintenancePerHour };
     openModal({
-      title: isNew ? 'Nueva impresora' : 'Editar impresora',
+      title: isNew ? 'Nueva máquina' : 'Editar máquina',
       body: `<div class="form-grid">
-        ${field('Nombre *', inp('name', pr.name, 'required placeholder="Ej. Bambu Lab P1S"'), { wide: true })}
-        ${field('Consumo medio (W) *', numInp('watts', pr.watts, 'required min="0"'), { hint: 'Ender/Prusa ≈ 80–150 W; con cámara cerrada más.' })}
+        ${field('Nombre *', inp('name', pr.name, 'required placeholder="Ej. Bambu Lab P1S, xTool S1…"'), { wide: true })}
+        ${field('Tipo', `<select name="type">${Object.entries(MACHINE_TYPES).map(([k, v]) => `<option value="${k}"${k === machineType(pr) ? ' selected' : ''}>${v}</option>`).join('')}</select>`)}
+        ${field('Consumo medio (W) *', numInp('watts', pr.watts, 'required min="0"'), { hint: 'Incluye extractor y air assist en láser. Impresora 3D ≈ 80–150 W.' })}
         ${field('Precio de compra *', numInp('price', pr.price, 'required min="0"'))}
         ${field('Vida útil estimada (h) *', numInp('lifeHours', pr.lifeHours, 'required min="1"'), { hint: 'Horas en las que la amortizas.' })}
-        ${field('Mantenimiento (/h)', numInp('maintenancePerHour', pr.maintenancePerHour, 'min="0"'), { hint: 'Boquillas, correas, PEI…' })}
-        ${field('Notas', inp('notes', pr.notes, 'placeholder="Boquilla 0.4, cama PEI…"'), { wide: true })}
+        ${field('Mantenimiento (/h)', numInp('maintenancePerHour', pr.maintenancePerHour, 'min="0"'), { hint: 'Boquillas, lentes, filtros, tubo láser…' })}
+        ${field('Notas', inp('notes', pr.notes, 'placeholder="Boquilla 0.4, módulo 20 W…"'), { wide: true })}
         ${isNew ? `${field('Fecha de compra', `<input type="date" name="date" value="${today()}">`)}
-          <div class="field wide"><label class="check"><input type="checkbox" name="asExpense"> Registrar la compra como gasto (Impresoras y herramientas)</label></div>` : ''}
+          <div class="field wide"><label class="check"><input type="checkbox" name="asExpense"> Registrar la compra como gasto (Máquinas y herramientas)</label></div>` : ''}
       </div>
       <div class="price-box" id="printer-preview"></div>`,
       onOpen: (b) => {
@@ -659,7 +822,7 @@
       },
       onSubmit: (b) => {
         const data = {
-          name: val(b, 'name'), notes: val(b, 'notes'), watts: num(val(b, 'watts')), price: num(val(b, 'price')),
+          type: val(b, 'type') || '3d', name: val(b, 'name'), notes: val(b, 'notes'), watts: num(val(b, 'watts')), price: num(val(b, 'price')),
           lifeHours: num(val(b, 'lifeHours')), maintenancePerHour: num(val(b, 'maintenancePerHour')),
         };
         if (data.lifeHours <= 0) { toast('La vida útil debe ser mayor que 0.'); return false; }
@@ -668,44 +831,48 @@
           S.printers.push(np);
           if (!findPrinter(S.settings.defaultPrinterId)) S.settings.defaultPrinterId = np.id;
           if (checked(b, 'asExpense') && data.price > 0) {
-            S.expenses.push({ id: uid(), date: val(b, 'date') || today(), category: 'maquinaria', description: `Impresora ${data.name}`, amount: data.price, printerId: np.id });
+            S.expenses.push({ id: uid(), date: val(b, 'date') || today(), category: 'maquinaria', description: `${MACHINE_TYPES[data.type]} ${data.name}`, amount: data.price, printerId: np.id });
           }
-          persist('Impresora añadida');
+          persist('Máquina añadida');
         } else {
           Object.assign(pr, data);
           S.prints.forEach((p) => { if (p.printerId === pr.id) p.printerName = pr.name; });
-          persist('Impresora actualizada');
+          persist('Máquina actualizada');
         }
       },
     });
   }
 
-  // ================================================================ IMPRESIONES
+  // ================================================================ TRABAJOS (impresión 3D, láser, sellos)
 
   function viewPrints() {
     const sold = soldByPrint(S.sales);
-    const list = [...S.prints].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+    const list = [...S.prints].filter((p) => ui.kind === 'all' || (p.kind || '3d') === ui.kind)
+      .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
     return `
       <div class="page-head">
-        <h1>Impresiones</h1>
+        <h1>Trabajos</h1>
         <div class="actions">
+          <select data-period="kind" aria-label="Tipo de trabajo"><option value="all">Todos los tipos</option>${Object.entries(KINDS).map(([k, v]) => `<option value="${k}"${ui.kind === k ? ' selected' : ''}>${v}</option>`).join('')}</select>
           <button class="btn" data-action="quote">Calculadora de coste</button>
-          <button class="btn primary" data-action="new-print">+ Registrar impresión</button>
+          <button class="btn primary" data-action="new-print">+ Registrar trabajo</button>
         </div>
       </div>
       <div class="card">
         ${list.length ? `<div class="table-wrap"><table>
-          <thead><tr><th>Fecha</th><th>Pieza</th><th class="num">Uds.</th><th class="num">Filamento</th><th class="num">Tiempo</th>
+          <thead><tr><th>Fecha</th><th>Pieza</th><th class="num">Uds.</th><th class="num">Material</th><th class="num">Tiempo</th>
             <th class="num">Coste total</th><th class="num">Coste ud.</th><th class="num">PVP sugerido</th><th class="num">Vendidas</th><th></th></tr></thead>
           <tbody>${list.map((p) => {
             const c = p.cost || {};
             const g = (p.items || []).reduce((s, it) => s + num(it.grams), 0);
+            const cm2 = (p.sheets || []).reduce((s, it) => s + (num(it.width) * num(it.height)) / 100, 0) * num(p.quantity);
+            const k = p.kind || '3d';
             const s = num(sold[p.id]);
             return `<tr>
               <td class="nowrap">${fmtDate(p.date)}</td>
-              <td><b>${esc(p.name)}</b><div class="small muted">${esc([p.printerName, (p.items || []).map((it) => it.filamentName).join(', '), (p.components || []).map((it) => `${fmtNum(it.qty, 2)}× ${it.componentName}`).join(', ')].filter(Boolean).join(' · '))}</div></td>
+              <td><span class="badge kind-${k}">${KIND_SHORT[k]}</span> <b>${esc(p.name)}</b><div class="small muted">${esc([p.printerName, (p.items || []).map((it) => it.filamentName).join(', '), (p.sheets || []).map((it) => it.materialName).join(', '), (p.components || []).map((it) => `${fmtNum(it.qty, 2)}× ${it.componentName}`).join(', ')].filter(Boolean).join(' · '))}</div></td>
               <td class="num">${fmtNum(p.quantity)}</td>
-              <td class="num">${fmtGrams(g)}</td>
+              <td class="num">${[g ? fmtGrams(g) : '', cm2 ? fmtNum(cm2) + ' cm²' : ''].filter(Boolean).join('<br>') || '—'}</td>
               <td class="num">${fmtHours(p.hours)}</td>
               <td class="num">${money(c.total)}</td>
               <td class="num"><b>${money(c.unit)}</b></td>
@@ -717,9 +884,9 @@
                 <button class="icon-btn" data-action="delete-print" data-id="${p.id}" aria-label="Eliminar" title="Eliminar">🗑</button>
               </td></tr>`;
           }).join('')}</tbody>
-        </table></div>` : `<div class="empty">Registra tu primera impresión para calcular su coste y descontar el filamento usado.</div>`}
+        </table></div>` : `<div class="empty">${S.prints.length ? 'No hay trabajos de este tipo.' : 'Registra tu primer trabajo para calcular su coste y descontar el material usado.'}</div>`}
       </div>
-      <p class="small muted">El coste incluye material, electricidad (consumo de cada impresora a ${money(S.settings.kwhPrice)}/kWh), amortización y mantenimiento de la impresora usada, mano de obra, extras y un ${fmtNum(S.settings.failureRate)} % por fallos. Cámbialo en Impresoras y Ajustes.</p>`;
+      <p class="small muted">El coste incluye material (filamento o plancha con un ${fmtNum(S.settings.sheetWaste)} % de desperdicio), componentes, electricidad (${money(S.settings.kwhPrice)}/kWh), amortización y mantenimiento de la máquina, mano de obra, extras y un ${fmtNum(S.settings.failureRate)} % por fallos. Cámbialo en Máquinas y Ajustes.</p>`;
   }
 
   function filamentOptions(selected) {
@@ -730,28 +897,35 @@
   function printForm(p, { quoteOnly = false } = {}) {
     const isNew = !p;
     if (!S.printers.length && !quoteOnly) {
-      toast('Primero añade tu impresora.');
+      toast('Primero añade una máquina (impresora 3D o láser).');
       return printerForm();
     }
-    if (!S.filaments.length && !quoteOnly) {
-      toast('Primero añade al menos un filamento.');
-      return filamentForm();
-    }
     const dp = defaultPrinter();
-    p = p || { printerId: dp ? dp.id : '', components: [], name: '', date: today(), quantity: 1, hours: 2, items: [{ filamentId: S.filaments[0] ? S.filaments[0].id : '', grams: 50 }], laborHours: 0, extras: 0, margin: '', notes: '', stockDeducted: true };
+    const firstOf = (type) => S.printers.find((m) => machineType(m) === type);
+    const startKind = p ? (p.kind || '3d') : (dp && machineType(dp) === 'laser' ? 'laser' : '3d');
+    const startMachine = startKind === '3d' ? (dp && machineType(dp) === '3d' ? dp : firstOf('3d')) : firstOf('laser');
+    p = p || { kind: startKind, printerId: (startMachine || dp || {}).id || '', components: [], sheets: [], name: '', date: today(), quantity: 1, hours: 2, items: [{ filamentId: S.filaments[0] ? S.filaments[0].id : '', grams: 50 }], laborHours: 0, extras: 0, margin: '', notes: '', stockDeducted: true };
     const h = Math.floor(num(p.hours)), m = Math.round((num(p.hours) - h) * 60);
     const printerMissing = !isNew && p.printerId && !findPrinter(p.printerId);
     const selPrinterId = findPrinter(p.printerId) ? p.printerId : (dp ? dp.id : '');
     const printerField = S.printers.length
-      ? field('Impresora', `<select name="printerId">${S.printers.map((pr) =>
-          `<option value="${pr.id}"${pr.id === selPrinterId ? ' selected' : ''}>${esc(pr.name)} · ${money(printerHourCost(pr))}/h</option>`).join('')}</select>`,
-          { wide: true, hint: printerMissing ? `⚠ La impresora original (${esc(p.printerName || '')}) se eliminó; elige otra.` : 'Cada impresora tiene su consumo, amortización y mantenimiento.' })
+      ? field('Máquina', `<select name="printerId">${S.printers.map((pr) =>
+          `<option value="${pr.id}"${pr.id === selPrinterId ? ' selected' : ''}>${esc(pr.name)} (${MACHINE_TYPES[machineType(pr)]}) · ${money(printerHourCost(pr))}/h</option>`).join('')}</select>`,
+          { hint: printerMissing ? `⚠ La máquina original (${esc(p.printerName || '')}) se eliminó; elige otra.` : 'Cada máquina tiene su consumo, amortización y mantenimiento.' })
       : '';
 
     const itemRow = (it) => `<div class="item-row">
         <select name="item-filament" aria-label="Filamento">${filamentOptions(it.filamentId)}</select>
         <input name="item-grams" type="number" step="any" min="0" value="${esc(it.grams)}" aria-label="Gramos" placeholder="g">
         <button type="button" class="icon-btn" data-remove-item aria-label="Quitar">✕</button></div>`;
+
+    const materialOptions = (selected) => `<option value="">— Elige material —</option>` + S.materials
+      .map((m) => `<option value="${m.id}"${m.id === selected ? ' selected' : ''}>${esc(materialLabel(m))} · ${money(sheetCostPerCm2(m) * 100)}/100 cm² (${fmtNum(m.stock, 2)} pl.)</option>`).join('');
+    const sheetRow = (it) => `<div class="sheet-row">
+        <select name="sheet-id" aria-label="Material">${materialOptions(it.materialId)}</select>
+        <input name="sheet-w" type="number" step="any" min="0" value="${esc(it.width)}" aria-label="Ancho por pieza (mm)" placeholder="ancho mm">
+        <input name="sheet-h" type="number" step="any" min="0" value="${esc(it.height)}" aria-label="Alto por pieza (mm)" placeholder="alto mm">
+        <button type="button" class="icon-btn" data-remove-sheet aria-label="Quitar">✕</button></div>`;
 
     const componentOptions = (selected) => `<option value="">— Elige componente —</option>` + S.components
       .map((c) => `<option value="${c.id}"${c.id === selected ? ' selected' : ''}>${esc(c.name)} · ${money(componentUnitCost(c))}/${esc(c.unit || 'ud.')} (${fmtNum(c.stock, 2)} disp.)</option>`).join('');
@@ -761,46 +935,82 @@
         <button type="button" class="icon-btn" data-remove-comp aria-label="Quitar">✕</button></div>`;
 
     openModal({
-      title: quoteOnly ? 'Calculadora de coste' : isNew ? 'Registrar impresión' : 'Editar impresión',
-      submitLabel: quoteOnly ? 'Guardar como impresión' : 'Guardar',
+      title: quoteOnly ? 'Calculadora de coste' : isNew ? 'Registrar trabajo' : 'Editar trabajo',
+      submitLabel: quoteOnly ? 'Guardar como trabajo' : 'Guardar',
       body: `<div class="form-grid">
-          ${field('Pieza *', inp('name', p.name, 'required placeholder="Ej. Soporte móvil"'), { wide: true })}
+          ${field('Pieza / encargo *', inp('name', p.name, 'required placeholder="Ej. Soporte móvil, Sello logo, Posavasos…"'), { wide: true })}
+          ${field('Tipo de trabajo', `<select name="kind">${Object.entries(KINDS).map(([k, v]) => `<option value="${k}"${k === (p.kind || '3d') ? ' selected' : ''}>${v}</option>`).join('')}</select>`)}
           ${printerField}
           ${field('Fecha', `<input type="date" name="date" value="${esc(p.date)}">`)}
           ${field('Unidades producidas', numInp('quantity', p.quantity, 'min="1" step="1"'), { hint: 'Piezas que salen de este trabajo.' })}
           ${field('Horas', numInp('h', h, 'min="0" step="1"'))}
-          ${field('Minutos', numInp('m', m, 'min="0" max="59" step="1"'), { hint: 'Tiempo total de impresión.' })}
+          ${field('Minutos', numInp('m', m, 'min="0" max="59" step="1"'), { hint: 'Tiempo total de máquina.' })}
         </div>
-        <h3 class="section-title">Filamento usado (gramos totales, según el laminador)</h3>
-        <div class="items-list" id="items">${(p.items.length ? p.items : [{ filamentId: '', grams: '' }]).map(itemRow).join('')}</div>
-        <button type="button" class="btn small" id="add-item" style="margin-top:8px">+ Añadir otro filamento</button>
+        <div id="sec-fil">
+          <h3 class="section-title">Filamento usado (gramos totales, según el laminador)</h3>
+          ${S.filaments.length ? `<div class="items-list" id="items">${((p.items || []).length ? p.items : [{ filamentId: S.filaments[0].id, grams: 50 }]).map(itemRow).join('')}</div>
+            <button type="button" class="btn small" id="add-item" style="margin-top:8px">+ Añadir otro filamento</button>`
+            : `<p class="small muted">Da de alta tus bobinas en <a href="#filaments" data-close-link>Filamentos</a> para sumarlas al coste.</p>`}
+        </div>
+        <div id="sec-sheet">
+          <h3 class="section-title">Material en plancha (medidas de cada pieza)</h3>
+          ${S.materials.length ? `<div class="items-list" id="sheets">${((p.sheets || []).length ? p.sheets : [{ materialId: S.materials[0].id, width: 100, height: 100 }]).map(sheetRow).join('')}</div>
+            <button type="button" class="btn small" id="add-sheet" style="margin-top:8px">+ Añadir otro material</button>
+            <p class="small muted" style="margin:6px 0 0">Ancho × alto en mm que ocupa cada pieza en la plancha; se suma un ${fmtNum(S.settings.sheetWaste)} % de desperdicio.</p>`
+            : `<p class="small muted">Da de alta madera, metacrilato, goma para sellos… en <a href="#materials" data-close-link>Materiales</a> para sumarlos al coste.</p>`}
+        </div>
         <h3 class="section-title">Componentes externos (cantidad por pieza)</h3>
         ${S.components.length ? `<div class="items-list" id="comps">${(p.components || []).map(compRow).join('')}</div>
           <button type="button" class="btn small" id="add-comp" style="margin-top:8px">+ Añadir componente</button>`
-          : `<p class="small muted">¿Lleva portalámparas, LED, imanes…? Dalos de alta en <a href="#components" data-close-link>Componentes</a> para sumarlos al coste.</p>`}
+          : `<p class="small muted">¿Lleva portalámparas, LED, imanes, mangos de sello…? Dalos de alta en <a href="#components" data-close-link>Componentes</a> para sumarlos al coste.</p>`}
         <h3 class="section-title">Otros costes</h3>
         <div class="form-grid">
-          ${field('Mano de obra (h)', numInp('laborHours', p.laborHours, 'min="0"'), { hint: `Post-procesado a ${money(S.settings.laborRate)}/h` })}
+          ${field('Mano de obra (h)', numInp('laborHours', p.laborHours, 'min="0"'), { hint: `Diseño, montaje y acabado a ${money(S.settings.laborRate)}/h` })}
           ${field('Extras (€)', numInp('extras', p.extras, 'min="0"'), { hint: 'Gastos sueltos no inventariados.' })}
           ${field('Margen (%)', numInp('margin', p.margin, `placeholder="${S.settings.defaultMargin}"`), { hint: 'Para el precio sugerido.' })}
           ${field('Notas', inp('notes', p.notes))}
-          ${quoteOnly || isNew ? `<div class="field wide"><label class="check"><input type="checkbox" name="deduct" ${quoteOnly ? '' : 'checked'}> Descontar filamento y componentes del stock</label></div>` : ''}
+          ${quoteOnly || isNew ? `<div class="field wide"><label class="check"><input type="checkbox" name="deduct" ${quoteOnly ? '' : 'checked'}> Descontar materiales y componentes del stock</label></div>` : ''}
         </div>
         <div class="card" style="margin:16px 0 0" id="preview"></div>`,
       onOpen: (b) => {
-        const readItems = () => $$('.item-row', b).map((row) => {
+        const kindSel = $('[name="kind"]', b);
+        const machineSel = $('[name="printerId"]', b);
+        const showSections = () => {
+          const k = kindSel.value;
+          $('#sec-fil', b).hidden = k !== '3d';
+          $('#sec-sheet', b).hidden = k === '3d';
+        };
+        kindSel.addEventListener('change', () => {
+          // proponer una máquina acorde al tipo de trabajo
+          const want = machineForKind(kindSel.value);
+          const cur = findPrinter(machineSel && machineSel.value);
+          if (machineSel && machineType(cur) !== want) {
+            const alt = S.printers.find((x) => machineType(x) === want);
+            if (alt) machineSel.value = alt.id;
+          }
+          showSections();
+        });
+        showSections();
+        const readSheets = () => (kindSel.value === '3d' ? [] : $$('.sheet-row', b).map((row) => {
+          const id = $('[name="sheet-id"]', row).value;
+          const mt = S.materials.find((x) => x.id === id);
+          return { materialId: id, materialName: mt ? materialLabel(mt) : '', width: num($('[name="sheet-w"]', row).value), height: num($('[name="sheet-h"]', row).value), costPerCm2: mt ? sheetCostPerCm2(mt) : 0 };
+        }).filter((it) => it.materialId && it.width > 0 && it.height > 0));
+        const readItems = () => (kindSel.value !== '3d' ? [] : $$('.item-row', b).map((row) => {
           const id = $('[name="item-filament"]', row).value;
           const f = S.filaments.find((x) => x.id === id);
           return { filamentId: id, filamentName: f ? filamentLabel(f) : '', grams: num($('[name="item-grams"]', row).value) };
-        }).filter((it) => it.filamentId && it.grams > 0);
+        }).filter((it) => it.filamentId && it.grams > 0));
         const readComps = () => $$('.comp-row', b).map((row) => {
           const id = $('[name="comp-id"]', row).value;
           const c = S.components.find((x) => x.id === id);
           return { componentId: id, componentName: c ? c.name : '', qty: num($('[name="comp-qty"]', row).value), unitCost: c ? componentUnitCost(c) : 0 };
         }).filter((it) => it.componentId && it.qty > 0);
         const readJob = () => ({
+          kind: kindSel.value,
           printerId: val(b, 'printerId'),
           items: readItems(),
+          sheets: readSheets(),
           components: readComps(),
           hours: num(val(b, 'h')) + num(val(b, 'm')) / 60,
           quantity: Math.max(1, Math.floor(num(val(b, 'quantity'))) || 1),
@@ -811,7 +1021,11 @@
         const refresh = () => {
           const job = readJob();
           const pr = findPrinter(job.printerId);
-          const c = printCost(job, filamentsById(), S.settings, pr, componentsById());
+          const c = printCost(job, filamentsById(), S.settings, pr, componentsById(), materialsById());
+          const prevSheets = !isNew && p.stockDeducted ? sheetsUsed(p.sheets, p.quantity, S.settings.sheetWaste, materialsById()) : {};
+          const shortSheets = Object.entries(sheetsUsed(job.sheets, job.quantity, S.settings.sheetWaste, materialsById()))
+            .map(([id, n]) => ({ mt: S.materials.find((x) => x.id === id), n }))
+            .filter(({ mt, n }) => mt && n > num(mt.stock) + num(prevSheets[mt.id]) + 1e-9);
           const prevComps = !isNew && p.stockDeducted ? componentsUsed(p.components, p.quantity) : {};
           const shortComps = Object.entries(componentsUsed(job.components, job.quantity))
             .map(([id, q]) => ({ c: S.components.find((x) => x.id === id), q }))
@@ -823,7 +1037,7 @@
             .filter(({ f, g }) => f && g > num(f.remaining) + num(prev[f.id]));
           $('#preview', b).innerHTML = `
             <dl class="breakdown">
-              <dt>Material</dt><dd>${money(c.material)}</dd>
+              ${job.kind === '3d' ? `<dt>Filamento</dt><dd>${money(c.material)}</dd>` : `<dt>Material en plancha (+${fmtNum(S.settings.sheetWaste)} % desperdicio)</dt><dd>${money(c.sheet)}</dd>`}
               <dt>Electricidad${pr ? ` (${fmtNum(pr.watts)} W)` : ''}</dt><dd>${money(c.electricity)}</dd>
               <dt>Amortización y mantenimiento${pr ? ` · ${esc(pr.name)}` : ''}</dt><dd>${money(c.machine)}</dd>
               ${c.components ? `<dt>Componentes externos</dt><dd>${money(c.components)}</dd>` : ''}
@@ -837,11 +1051,16 @@
               <div><div class="small muted">Precio sugerido (+${fmtNum(c.margin)} %)</div><strong>${money(c.suggestedUnitPrice)}</strong></div>
             </div>
             ${short.length ? `<p class="small neg">⚠ Stock insuficiente: ${short.map(({ f }) => esc(f.name) + ' (' + fmtGrams(f.remaining) + ')').join(', ')}</p>` : ''}
+            ${shortSheets.length ? `<p class="small neg">⚠ Faltan planchas: ${shortSheets.map(({ mt, n }) => `${esc(materialLabel(mt))} (necesitas ${fmtNum(n, 2)}, hay ${fmtNum(mt.stock, 2)})`).join(', ')}</p>` : ''}
             ${shortComps.length ? `<p class="small neg">⚠ Faltan componentes: ${shortComps.map(({ c: k, q }) => `${esc(k.name)} (necesitas ${fmtNum(q, 2)}, hay ${fmtNum(k.stock, 2)})`).join(', ')}</p>` : ''}`;
         };
         b.addEventListener('input', refresh);
         b.addEventListener('change', refresh);
         b.addEventListener('click', (e) => {
+          if (e.target.closest('[data-remove-sheet]')) {
+            if ($$('.sheet-row', b).length > 1) e.target.closest('.sheet-row').remove();
+            refresh();
+          }
           if (e.target.closest('[data-remove-comp]')) {
             e.target.closest('.comp-row').remove();
             refresh();
@@ -858,8 +1077,14 @@
           $('#comps', b).insertAdjacentHTML('beforeend', compRow({ componentId: '', qty: 1 }));
           refresh();
         });
-        $('#add-item', b).addEventListener('click', () => {
+        const addItem = $('#add-item', b);
+        if (addItem) addItem.addEventListener('click', () => {
           $('#items', b).insertAdjacentHTML('beforeend', itemRow({ filamentId: '', grams: '' }));
+          refresh();
+        });
+        const addSheet = $('#add-sheet', b);
+        if (addSheet) addSheet.addEventListener('click', () => {
+          $('#sheets', b).insertAdjacentHTML('beforeend', sheetRow({ materialId: '', width: '', height: '' }));
           refresh();
         });
         b._readJob = readJob;
@@ -867,24 +1092,21 @@
       },
       onSubmit: (b) => {
         const job = b._readJob();
-        if (!job.items.length && !job.hours) { toast('Indica el filamento usado o el tiempo de impresión.'); return false; }
+        if (!job.items.length && !job.sheets.length && !job.components.length && !job.hours) { toast('Indica el material usado o el tiempo de máquina.'); return false; }
         const pr = findPrinter(job.printerId);
-        const cost = printCost(job, filamentsById(), S.settings, pr, componentsById());
+        const cost = printCost(job, filamentsById(), S.settings, pr, componentsById(), materialsById());
         const data = { ...job, printerName: pr ? pr.name : '', name: val(b, 'name'), date: val(b, 'date') || today(), notes: val(b, 'notes'), cost };
         if (isNew) {
           const deduct = checked(b, 'deduct');
-          if (deduct) { applyStock(data.items, -1); applyComponentStock(data.components, data.quantity, -1); }
+          if (deduct) applyJobStock(data, -1);
           S.prints.push({ id: uid(), ...data, stockDeducted: deduct });
-          persist(deduct ? 'Impresión registrada y stock actualizado' : 'Impresión registrada');
+          persist(deduct ? 'Trabajo registrado y stock actualizado' : 'Trabajo registrado');
         } else {
-          if (p.stockDeducted) {
-            applyStock(p.items, +1); applyStock(data.items, -1);
-            applyComponentStock(p.components, p.quantity, +1); applyComponentStock(data.components, data.quantity, -1);
-          }
+          if (p.stockDeducted) { applyJobStock(p, +1); applyJobStock(data, -1); }
           Object.assign(p, data);
           // actualizar el coste en las ventas ligadas que no se hayan modificado a mano
           S.sales.forEach((s) => { if (s.printId === p.id && s.costFromPrint) s.unitCost = cost.unit; });
-          persist('Impresión actualizada');
+          persist('Trabajo actualizado');
         }
       },
     });
@@ -943,7 +1165,7 @@
     openModal({
       title: isNew ? 'Nueva venta' : 'Editar venta',
       body: `<div class="form-grid">
-        ${field('Pieza impresa', `<select name="printId"><option value="">— Venta libre (sin impresión registrada) —</option>${prints.map((p) =>
+        ${field('Trabajo', `<select name="printId"><option value="">— Venta libre (sin trabajo registrado) —</option>${prints.map((p) =>
           `<option value="${p.id}"${p.id === s.printId ? ' selected' : ''}>${esc(p.name)} · ${fmtDate(p.date)} (${fmtNum(available(p))} disp.)</option>`).join('')}</select>`, { wide: true })}
         ${field('Descripción *', inp('description', s.description, 'required'), { wide: true })}
         ${field('Fecha', `<input type="date" name="date" value="${esc(s.date)}">`)}
@@ -1001,10 +1223,11 @@
 
   const EXPENSE_CATEGORIES = {
     filamento: 'Filamento',
+    materiales: 'Materiales en plancha',
     componentes: 'Componentes',
     electricidad: 'Electricidad',
     repuestos: 'Repuestos y mantenimiento',
-    maquinaria: 'Impresoras y herramientas',
+    maquinaria: 'Máquinas y herramientas',
     embalaje: 'Embalaje y envíos',
     otros: 'Otros',
   };
@@ -1067,16 +1290,17 @@
     return `
       <div class="page-head"><h1>Ajustes</h1></div>
       <form class="card" id="settings-form">
-        <h2>Costes de impresión</h2>
+        <h2>Costes de producción</h2>
         <div class="form-grid">
           ${field('Moneda', `<select name="currency">${['EUR', 'USD', 'MXN', 'ARS', 'COP', 'CLP', 'GBP'].map((c) => `<option${c === st.currency ? ' selected' : ''}>${c}</option>`).join('')}</select>`)}
           ${field('Precio electricidad (/kWh)', numInp('kwhPrice', st.kwhPrice, 'min="0"'))}
           ${field('Mano de obra (/h)', numInp('laborRate', st.laborRate, 'min="0"'))}
-          ${field('Margen por fallos (%)', numInp('failureRate', st.failureRate, 'min="0"'))}
+          ${field('Margen por fallos (%)', numInp('failureRate', st.failureRate, 'min="0"'), { hint: 'Impresiones o cortes fallidos.' })}
+          ${field('Desperdicio de plancha (%)', numInp('sheetWaste', st.sheetWaste, 'min="0"'), { hint: 'Márgenes, recortes y separación entre piezas.' })}
           ${field('Margen de beneficio por defecto (%)', numInp('defaultMargin', st.defaultMargin, 'min="0"'))}
           ${field('Aviso de stock bajo (g)', numInp('lowStockGrams', st.lowStockGrams, 'min="0"'))}
         </div>
-        <p class="small muted">El consumo, precio, vida útil y mantenimiento de cada máquina se configuran en <a href="#printers">Impresoras</a>.</p>
+        <p class="small muted">El consumo, precio, vida útil y mantenimiento de cada máquina se configuran en <a href="#printers">Máquinas</a>.</p>
         <button class="btn primary" type="submit">Guardar ajustes</button>
       </form>
 
@@ -1095,6 +1319,7 @@
           <button class="btn" data-action="export-csv" data-kind="sales">Ventas CSV</button>
           <button class="btn" data-action="export-csv" data-kind="expenses">Gastos CSV</button>
           <button class="btn" data-action="export-csv" data-kind="filaments">Filamentos CSV</button>
+          <button class="btn" data-action="export-csv" data-kind="materials">Materiales CSV</button>
           <button class="btn" data-action="export-csv" data-kind="components">Componentes CSV</button>
           <button class="btn" data-action="load-demo">Cargar datos de ejemplo</button>
           <button class="btn danger" data-action="reset">Borrar todo</button>
@@ -1149,6 +1374,9 @@
     if (kind === 'sales') {
       rows = [['Fecha', 'Descripción', 'Cliente', 'Canal', 'Unidades', 'Precio ud.', 'Ingreso', 'Comisiones', 'Coste', 'Beneficio']];
       S.sales.forEach((s) => { const t = saleTotals(s); rows.push([s.date, s.description, s.customer, s.channel, num(s.quantity), num(s.unitPrice), t.revenue, t.fees, t.cogs, t.profit]); });
+    } else if (kind === 'materials') {
+      rows = [['Nombre', 'Categoría', 'Grosor (mm)', 'Ancho (mm)', 'Alto (mm)', 'Precio plancha', 'Coste cm²', 'Stock (planchas)', 'Valor stock', 'Proveedor']];
+      S.materials.forEach((m) => rows.push([m.name, m.category, num(m.thickness), num(m.sheetWidth), num(m.sheetHeight), num(m.price), sheetCostPerCm2(m), num(m.stock), Math.max(0, num(m.stock)) * num(m.price), m.supplier]));
     } else if (kind === 'components') {
       rows = [['Nombre', 'Categoría', 'Unidad', 'Precio paquete', 'Uds. por paquete', 'Coste ud.', 'Stock', 'Valor stock', 'Proveedor']];
       S.components.forEach((c) => rows.push([c.name, c.category, c.unit, num(c.price), num(c.packUnits), componentUnitCost(c), num(c.stock), Math.max(0, num(c.stock)) * componentUnitCost(c), c.supplier]));
@@ -1199,28 +1427,42 @@
     const f2 = { id: uid(), name: 'PETG Transparente', material: 'PETG', color: '#cfe8f3', colorName: 'Transparente', brand: 'Prusament', diameter: '1.75', spoolWeight: 1000, price: 29.99, remaining: 0, lowStock: '' };
     const f3 = { id: uid(), name: 'PLA Silk Oro', material: 'Silk PLA', color: '#d4a93a', colorName: 'Oro', brand: 'Eryone', diameter: '1.75', spoolWeight: 1000, price: 22.5, remaining: 0, lowStock: 250 };
     const f4 = { id: uid(), name: 'TPU Rojo', material: 'TPU', color: '#c62828', colorName: 'Rojo', brand: 'Overture', diameter: '1.75', spoolWeight: 500, price: 18, remaining: 0, lowStock: 100 };
-    const pr1 = { id: uid(), name: 'Bambu Lab P1S', notes: 'Cerrada · AMS', watts: 110, price: 699, lifeHours: 6000, maintenancePerHour: 0.08 };
-    const pr2 = { id: uid(), name: 'Creality Ender 3 V3', notes: 'Boquilla 0.4', watts: 150, price: 229, lifeHours: 4000, maintenancePerHour: 0.05 };
+    const pr1 = { id: uid(), type: '3d', name: 'Bambu Lab P1S', notes: 'Cerrada · AMS', watts: 110, price: 699, lifeHours: 6000, maintenancePerHour: 0.08 };
+    const pr3 = { id: uid(), type: 'laser', name: 'xTool S1 20 W', notes: 'Diodo 20 W · air assist · extractor', watts: 160, price: 1099, lifeHours: 10000, maintenancePerHour: 0.12 };
+    const pr2 = { id: uid(), type: '3d', name: 'Creality Ender 3 V3', notes: 'Boquilla 0.4', watts: 150, price: 229, lifeHours: 4000, maintenancePerHour: 0.05 };
     st.defaultPrinterId = pr1.id;
     const c1 = { id: uid(), name: 'Tira LED USB blanco cálido', category: 'Iluminación', unit: 'ud.', price: 5.99, packUnits: 1, stock: 0, lowStock: 2, supplier: 'Amazon' };
     const c2 = { id: uid(), name: 'Imanes neodimio 6×2 mm', category: 'Imanes', unit: 'ud.', price: 6.5, packUnits: 50, stock: 0, lowStock: 10, supplier: 'AliExpress' };
     const c3 = { id: uid(), name: 'Anillas de llavero 25 mm', category: 'Llaveros y anillas', unit: 'ud.', price: 4.2, packUnits: 100, stock: 0, lowStock: 20, supplier: 'AliExpress' };
     const c4 = { id: uid(), name: 'Portalámparas E14 con cable', category: 'Iluminación', unit: 'ud.', price: 17.9, packUnits: 5, stock: 0, lowStock: 2, supplier: 'Leroy Merlin' };
-    const state = { version: 1, demo: true, settings: st, printers: [pr1, pr2], components: [c1, c2, c3, c4], filaments: [f1, f2, f3, f4], prints: [], sales: [], expenses: [] };
+    const c5 = { id: uid(), name: 'Mango de madera para sello 40 mm', category: 'Sellos', unit: 'ud.', price: 11.9, packUnits: 10, stock: 0, lowStock: 3, supplier: 'Amazon' };
+    const c6 = { id: uid(), name: 'Almohadilla de tinta negra', category: 'Sellos', unit: 'ud.', price: 3.5, packUnits: 1, stock: 0, lowStock: 2, supplier: 'Papelería' };
+    const m1 = { id: uid(), name: 'Contrachapado de abedul', category: 'Contrachapado', thickness: 3, sheetWidth: 600, sheetHeight: 400, price: 4.8, stock: 0, lowStock: 2, supplier: 'Maderas del Sur' };
+    const m2 = { id: uid(), name: 'Metacrilato transparente', category: 'Metacrilato', thickness: 3, sheetWidth: 600, sheetHeight: 400, price: 11.5, stock: 0, lowStock: 1, supplier: 'Plásticos Levante' };
+    const m3 = { id: uid(), name: 'Goma láser para sellos', category: 'Goma para sellos', thickness: 2.3, sheetWidth: 297, sheetHeight: 210, price: 8.9, stock: 0, lowStock: 1, supplier: 'Trotec' };
+    const m4 = { id: uid(), name: 'Cuero vegetal', category: 'Cuero', thickness: 2, sheetWidth: 300, sheetHeight: 300, price: 14, stock: 0, lowStock: 1, supplier: 'Curtidos Ubrique' };
+    const state = { version: 1, demo: true, settings: st, printers: [pr1, pr2, pr3], materials: [m1, m2, m3, m4], components: [c1, c2, c3, c4, c5, c6], filaments: [f1, f2, f3, f4], prints: [], sales: [], expenses: [] };
     state.expenses.push({ id: uid(), date: d(0, 1), category: 'maquinaria', description: 'Impresora Creality Ender 3 V3', amount: 229, printerId: pr2.id });
+    state.expenses.push({ id: uid(), date: d(1, 5), category: 'maquinaria', description: 'Láser xTool S1 20 W', amount: 1099, printerId: pr3.id });
+    const buyM = (m, n, date) => { m.stock += n; state.expenses.push({ id: uid(), date, category: 'materiales', description: `${fmtSheets(n)} · ${materialLabel(m)}`, amount: n * m.price, materialId: m.id }); };
+    buyM(m1, 10, d(1, 6)); buyM(m2, 3, d(1, 6)); buyM(m3, 4, d(2, 3)); buyM(m4, 2, d(3, 10)); buyM(m1, 5, d(4, 15));
     const buy = (f, n, date) => { f.remaining += n * f.spoolWeight; state.expenses.push({ id: uid(), date, category: 'filamento', description: `${n} × ${filamentLabel(f)}`, amount: n * f.price, filamentId: f.id }); };
     const buyC = (c, packs, date) => { c.stock += packs * c.packUnits; state.expenses.push({ id: uid(), date, category: 'componentes', description: `${packs} × ${c.name}`, amount: packs * c.price, componentId: c.id }); };
-    buyC(c1, 3, d(2, 20)); buyC(c2, 1, d(0, 4)); buyC(c3, 1, d(3, 28)); buyC(c4, 1, d(4, 2));
+    buyC(c5, 1, d(2, 3)); buyC(c6, 5, d(2, 3));
+    buyC(c1, 5, d(2, 20)); buyC(c2, 1, d(0, 4)); buyC(c3, 1, d(3, 28)); buyC(c4, 1, d(4, 2));
     buy(f1, 3, d(0, 3)); buy(f2, 1, d(0, 3)); buy(f3, 1, d(1, 12)); buy(f4, 1, d(2, 5)); buy(f1, 2, d(4, 8));
     state.expenses.push({ id: uid(), date: d(0, 10), category: 'repuestos', description: 'Boquillas 0.4 mm y cama PEI', amount: 34.9 });
     state.expenses.push({ id: uid(), date: d(3, 2), category: 'embalaje', description: 'Cajas y bolsas de envío', amount: 22 });
     state.expenses.push({ id: uid(), date: d(5, 1), category: 'repuestos', description: 'Correas GT2', amount: 12.5 });
     const byId = () => Object.fromEntries(state.filaments.map((f) => [f.id, f]));
+    const matsById = () => Object.fromEntries(state.materials.map((m) => [m.id, m]));
     const print = (name, date, qty, hours, items, extra = {}) => {
       const pr = extra.printer || pr1;
+      const sheets = (extra.sheets || []).map(([m, w, h]) => ({ materialId: m.id, materialName: materialLabel(m), width: w, height: h, costPerCm2: sheetCostPerCm2(m) }));
       const comps = (extra.components || []).map(([c, q]) => ({ componentId: c.id, componentName: c.name, qty: q, unitCost: componentUnitCost(c) }));
-      const job = { printerId: pr.id, printerName: pr.name, components: comps, items: items.map(([f, g]) => ({ filamentId: f.id, filamentName: filamentLabel(f), grams: g })), hours, quantity: qty, laborHours: extra.labor || 0, extras: extra.extras || 0, margin: '' };
-      const p = { id: uid(), name, date, notes: '', ...job, cost: printCost(job, byId(), st, pr, Object.fromEntries(state.components.map((c) => [c.id, c]))), stockDeducted: true };
+      const job = { kind: extra.kind || '3d', printerId: pr.id, printerName: pr.name, sheets, components: comps, items: items.map(([f, g]) => ({ filamentId: f.id, filamentName: filamentLabel(f), grams: g })), hours, quantity: qty, laborHours: extra.labor || 0, extras: extra.extras || 0, margin: '' };
+      const p = { id: uid(), name, date, notes: '', ...job, cost: printCost(job, byId(), st, pr, Object.fromEntries(state.components.map((c) => [c.id, c])), matsById()), stockDeducted: true };
+      Object.entries(sheetsUsed(sheets, qty, st.sheetWaste, matsById())).forEach(([id, n]) => { matsById()[id].stock = Math.round((matsById()[id].stock - n) * 1000) / 1000; });
       job.items.forEach((it) => { byId()[it.filamentId].remaining -= it.grams; });
       comps.forEach((it) => { state.components.find((c) => c.id === it.componentId).stock -= it.qty * qty; });
       state.prints.push(p);
@@ -1235,6 +1477,23 @@
     const p6 = print('Llaveros personalizados', d(4, 11), 25, 5, [[f1, 150], [f3, 90]], { labor: 1.5, components: [[c3, 1]] });
     const p7 = print('Maceta geométrica', d(5, 4), 4, 12.5, [[f3, 450]], { extras: 2 });
     const p8 = print('Lámpara de mesa Voronoi', d(4, 20), 2, 22, [[f1, 380]], { labor: 1.5, components: [[c4, 1]] });
+    const L = (name, date, qty, hours, sheets, extra = {}) => print(name, date, qty, hours, [], { kind: 'laser', printer: pr3, sheets, ...extra });
+    const l1 = L('Posavasos grabados (set)', d(1, 10), 12, 1.5, [[m1, 100, 100]], { labor: 0.5 });
+    const l2 = L('Letrero de metacrilato con nombre', d(2, 14), 1, 0.75, [[m2, 400, 200]], { labor: 0.5, components: [[c1, 1]] });
+    const l3 = L('Llaveros de cuero grabados', d(3, 18), 20, 1, [[m4, 70, 35]], { labor: 1, components: [[c3, 1]] });
+    const l4 = L('Cajas regalo de madera', d(4, 6), 4, 2, [[m1, 300, 200]], { labor: 1 });
+    const l5 = L('Adornos navideños personalizados', d(5, 3), 30, 1.25, [[m1, 80, 80]], { labor: 1 });
+    const s1 = L('Sello logo empresa', d(2, 8), 1, 0.3, [[m3, 40, 40]], { kind: 'sello', labor: 0.75, components: [[c5, 1]] });
+    const s2 = L('Sellos boda (iniciales)', d(3, 25), 3, 0.5, [[m3, 50, 50]], { kind: 'sello', labor: 1, components: [[c5, 1], [c6, 1]] });
+    const s3 = L('Sello «Pagado» para tienda', d(5, 6), 2, 0.25, [[m3, 60, 25]], { kind: 'sello', labor: 0.5, components: [[c5, 1]] });
+    sell(l1, d(1, 16), 12, 3.5, 3.9, 'Bar La Terraza', 'Directo');
+    sell(l2, d(2, 19), 1, 38, 4.6, 'Sara', 'Etsy');
+    sell(l3, d(3, 26), 15, 6, 5.1, 'Moto Club', 'Directo');
+    sell(l4, d(4, 12), 3, 22, 4.4, '', 'Etsy');
+    sell(l5, d(5, Math.min(Number(t.slice(8, 10)), 12)), 18, 4.5, 3, 'Colegio San Jorge', 'Directo');
+    sell(s1, d(2, 11), 1, 29, 0, 'Asesoría Martín', 'Directo');
+    sell(s2, d(4, 1), 3, 19, 2.8, 'Lucía y Pablo', 'Etsy');
+    sell(s3, d(5, Math.min(Number(t.slice(8, 10)), 9)), 2, 17, 0, 'Floristería Nube', 'Directo');
     sell(p1, d(0, 14), 2, 14.9, 2.4, 'Laura', 'Etsy'); sell(p1, d(1, 3), 2, 14.9, 1.2, '', 'Wallapop');
     sell(p2, d(1, 18), 3, 16, 3.1, 'Floristería Nube', 'Directo');
     sell(p3, d(2, 1), 1, 24, 3.8, 'Marc', 'Etsy'); sell(p4, d(2, 20), 6, 7.5, 2, '', 'Feria');
@@ -1245,7 +1504,7 @@
 
   // ================================================================ ENRUTADO Y EVENTOS
 
-  const VIEWS = { dashboard: viewDashboard, filaments: viewFilaments, components: viewComponents, printers: viewPrinters, prints: viewPrints, sales: viewSales, expenses: viewExpenses, settings: viewSettings };
+  const VIEWS = { dashboard: viewDashboard, filaments: viewFilaments, materials: viewMaterials, components: viewComponents, printers: viewPrinters, prints: viewPrints, sales: viewSales, expenses: viewExpenses, settings: viewSettings };
   const currentView = () => { const v = location.hash.slice(1); return VIEWS[v] ? v : 'dashboard'; };
 
   function render() {
@@ -1287,6 +1546,16 @@
 
   const actions = {
     'new-filament': () => filamentForm(),
+    'new-material': () => materialForm(),
+    'edit-material': (id) => materialForm(find(S.materials, id)),
+    'restock-material': (id) => restockMaterialForm(find(S.materials, id)),
+    'delete-material': (id) => {
+      const m = find(S.materials, id);
+      askConfirm(`¿Eliminar "${materialLabel(m)}"? Los trabajos que lo usan conservan su coste.`, () => {
+        S.materials = S.materials.filter((x) => x.id !== id);
+        persist('Material eliminado');
+      });
+    },
     'new-component': () => componentForm(),
     'edit-component': (id) => componentForm(find(S.components, id)),
     'restock-component': (id) => restockComponentForm(find(S.components, id)),
@@ -1308,14 +1577,14 @@
     },
     'new-printer': () => printerForm(),
     'edit-printer': (id) => printerForm(findPrinter(id)),
-    'default-printer': (id) => { S.settings.defaultPrinterId = id; persist('Impresora predeterminada cambiada'); },
+    'default-printer': (id) => { S.settings.defaultPrinterId = id; persist('Máquina predeterminada cambiada'); },
     'delete-printer': (id) => {
       const pr = findPrinter(id);
       const jobs = S.prints.filter((p) => p.printerId === id).length;
-      askConfirm(`¿Eliminar "${pr.name}"?` + (jobs ? `\nSus ${jobs} impresión(es) conservan el coste ya calculado.` : ''), () => {
+      askConfirm(`¿Eliminar "${pr.name}"?` + (jobs ? `\nSus ${jobs} trabajo(s) conservan el coste ya calculado.` : ''), () => {
         S.printers = S.printers.filter((x) => x.id !== id);
         if (S.settings.defaultPrinterId === id) S.settings.defaultPrinterId = S.printers[0] ? S.printers[0].id : '';
-        persist('Impresora eliminada');
+        persist('Máquina eliminada');
       });
     },
     'new-print': () => printForm(),
@@ -1324,12 +1593,12 @@
     'delete-print': (id) => {
       const p = find(S.prints, id);
       const linked = S.sales.filter((s) => s.printId === id).length;
-      const msg = `¿Eliminar la impresión "${p.name}"?` + (p.stockDeducted ? '\nEl filamento y los componentes usados se devolverán al stock.' : '') + (linked ? `\nTiene ${linked} venta(s) asociada(s): se conservarán como ventas libres.` : '');
+      const msg = `¿Eliminar el trabajo "${p.name}"?` + (p.stockDeducted ? '\nEl material y los componentes usados se devolverán al stock.' : '') + (linked ? `\nTiene ${linked} venta(s) asociada(s): se conservarán como ventas libres.` : '');
       askConfirm(msg, () => {
-        if (p.stockDeducted) { applyStock(p.items, +1); applyComponentStock(p.components, p.quantity, +1); }
+        if (p.stockDeducted) applyJobStock(p, +1);
         S.sales.forEach((s) => { if (s.printId === id) { s.printId = null; s.costFromPrint = false; } });
         S.prints = S.prints.filter((x) => x.id !== id);
-        persist('Impresión eliminada');
+        persist('Trabajo eliminado');
       });
     },
     'sell-print': (id) => saleForm(null, id),
@@ -1353,7 +1622,7 @@
     'import-json': () => $('#import-file').click(),
     'export-csv': (id, el) => exportCSV(el.dataset.kind),
     'load-demo': () => {
-      const hasData = S.printers.length || S.components.length || S.filaments.length || S.prints.length || S.sales.length || S.expenses.length;
+      const hasData = S.printers.length || S.materials.length || S.components.length || S.filaments.length || S.prints.length || S.sales.length || S.expenses.length;
       const load = () => { S = demoData(); persist('Datos de ejemplo cargados'); };
       if (hasData && !S.demo) askConfirm('Los datos de ejemplo reemplazarán tus datos actuales. ¿Continuar?', load, 'Cargar ejemplo');
       else load();
