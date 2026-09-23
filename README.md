@@ -29,7 +29,7 @@ Si ya usabas una versión anterior, la impresora que tenías en Ajustes se convi
 
 ## Usarla entre varias personas (servidor con PHP + MySQL)
 
-La app puede guardar los datos en una base de datos MySQL de tu servidor para que varias personas trabajen con los mismos datos, cada una con su usuario y contraseña. Incluye aviso cuando dos personas guardan a la vez, actualización automática de los cambios de los demás e historial de versiones para restaurar.
+La app puede guardar los datos en una base de datos MySQL de tu servidor para que varias personas trabajen con los mismos datos, entrando con su cuenta de Google (solo los correos autorizados) o con usuario y contraseña. La API funciona con PHP 5.6 o superior. Incluye aviso cuando dos personas guardan a la vez, actualización automática de los cambios de los demás e historial de versiones para restaurar.
 
 ```bash
 npm run package   # crea dist/daprintbox-servidor.zip listo para subir

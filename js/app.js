@@ -109,7 +109,7 @@
 
   // Modo servidor: los datos se guardan en MySQL a través de api/api.php (ver js/config.js)
   const remote = !!(window.Remote && window.Remote.enabled);
-  const sync = { ready: false, user: null, version: 0, pending: false, saving: false, error: '', updatedBy: '', updatedAt: '' };
+  const sync = { ready: false, user: null, email: '', version: 0, pending: false, saving: false, error: '', updatedBy: '', updatedAt: '' };
 
   function persist(msg) {
     if (remote) {
@@ -1352,7 +1352,7 @@
 
       ${remote ? `<div class="card">
         <h2>Servidor compartido</h2>
-        <p class="small">Has entrado como <b>${esc(sync.user || '')}</b>. Los datos se guardan en el servidor y los ve todo el equipo.</p>
+        <p class="small">Has entrado como <b>${esc(sync.user || '')}</b>${sync.email ? ` (${esc(sync.email)})` : ''}. Los datos se guardan en el servidor y los ve todo el equipo.</p>
         <p class="small muted">Versión ${fmtNum(sync.version)}${sync.updatedBy ? ` · último cambio de ${esc(sync.updatedBy)}${sync.updatedAt ? ' el ' + esc(fmtDateTime(sync.updatedAt)) : ''}` : ''}</p>
         <div class="filters">
           <button class="btn" data-action="history">Historial de versiones</button>
@@ -1634,47 +1634,112 @@
     if (retry) retry.addEventListener('click', () => queueSave('Cambios guardados'));
   }
 
-  function showLogin(message) {
+  let authConfig = null;
+  let googleScript = null;
+
+  /** Carga la librería oficial de «Iniciar sesión con Google» (una sola vez). */
+  function loadGoogleScript() {
+    if (!googleScript) {
+      googleScript = new Promise((resolve, reject) => {
+        const tag = document.createElement('script');
+        tag.src = 'https://accounts.google.com/gsi/client';
+        tag.async = true;
+        tag.onload = () => resolve(window.google);
+        tag.onerror = () => { googleScript = null; reject(new Error('No se pudo cargar el acceso con Google. Revisa la conexión.')); };
+        document.head.appendChild(tag);
+      });
+    }
+    return googleScript;
+  }
+
+  async function afterLogin(r) {
+    sync.user = r.user;
+    sync.email = r.email || '';
+    $('.tabs').hidden = false;
+    if (sync.pending) {
+      // había cambios sin guardar antes de caducar la sesión
+      sync.ready = true;
+      render();
+      queueSave('Cambios guardados');
+    } else {
+      await loadFromServer();
+    }
+  }
+
+  async function showLogin(message) {
     sync.ready = false;
     $('.tabs').hidden = true;
     updateSyncBadge();
-    view.innerHTML = `<form class="card login" id="login-form" novalidate>
-      <h1>Daprintbox</h1>
-      <p class="small muted">Entra con tu usuario para ver y guardar los datos compartidos del taller.</p>
-      ${message ? `<p class="small neg">${esc(message)}</p>` : ''}
-      <div class="form-grid" style="grid-template-columns:1fr">
-        <div class="field"><label for="login-user">Usuario</label><input id="login-user" name="username" autocomplete="username" required></div>
-        <div class="field"><label for="login-pass">Contraseña</label><input id="login-pass" name="password" type="password" autocomplete="current-password" required></div>
-      </div>
-      <p class="small neg" id="login-error" hidden></p>
-      <button class="btn primary" type="submit" style="margin-top:12px">Entrar</button>
-    </form>`;
-    const form = $('#login-form');
-    $('#login-user').focus();
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const btn = $('button[type="submit"]', form);
-      const err = $('#login-error');
-      btn.disabled = true;
-      err.hidden = true;
-      try {
-        const r = await window.Remote.login($('#login-user').value.trim(), $('#login-pass').value);
-        sync.user = r.user;
-        $('.tabs').hidden = false;
-        if (sync.pending) {
-          // había cambios sin guardar antes de caducar la sesión
-          sync.ready = true;
-          render();
-          queueSave('Cambios guardados');
-        } else {
-          await loadFromServer();
-        }
-      } catch (ex) {
-        err.textContent = ex.message;
-        err.hidden = false;
-        btn.disabled = false;
+    view.innerHTML = '<div class="empty">Cargando…</div>';
+    if (!authConfig) {
+      try { authConfig = await window.Remote.authConfig(); } catch (e) {
+        view.innerHTML = `<div class="card"><h2>No se pudo conectar con el servidor</h2><p class="small">${esc(e.message)}</p>
+          <button class="btn primary" id="retry-connect">Reintentar</button></div>`;
+        $('#retry-connect').addEventListener('click', () => showLogin(message));
+        return;
       }
-    });
+    }
+    const withGoogle = authConfig.methods.includes('google') && authConfig.google_client_id;
+    const withPassword = authConfig.methods.includes('password');
+    view.innerHTML = `<div class="card login">
+      <h1>Daprintbox</h1>
+      <p class="small muted">Entra para ver y guardar los datos compartidos del taller.</p>
+      ${message ? `<p class="small neg">${esc(message)}</p>` : ''}
+      ${withGoogle ? '<div id="google-btn" class="google-btn"><span class="small muted">Cargando el acceso con Google…</span></div>' : ''}
+      ${withGoogle && withPassword ? '<p class="login-or small muted">o con usuario y contraseña</p>' : ''}
+      ${withPassword ? `<form id="login-form" novalidate>
+        <div class="form-grid" style="grid-template-columns:1fr">
+          <div class="field"><label for="login-user">Usuario</label><input id="login-user" name="username" autocomplete="username" required></div>
+          <div class="field"><label for="login-pass">Contraseña</label><input id="login-pass" name="password" type="password" autocomplete="current-password" required></div>
+        </div>
+        <button class="btn${withGoogle ? '' : ' primary'}" type="submit" style="margin-top:12px">Entrar</button>
+      </form>` : ''}
+      <p class="small neg" id="login-error" hidden></p>
+    </div>`;
+    const showError = (msg) => { const el = $('#login-error'); el.textContent = msg; el.hidden = false; };
+
+    if (withGoogle) {
+      loadGoogleScript().then((google) => {
+        const box = $('#google-btn');
+        if (!box) return;
+        box.innerHTML = '';
+        google.accounts.id.initialize({
+          client_id: authConfig.google_client_id,
+          ux_mode: 'popup',
+          callback: async (resp) => {
+            $('#login-error').hidden = true;
+            try {
+              const r = await window.Remote.loginGoogle(resp.credential);
+              await afterLogin(r);
+            } catch (e) { showError(e.message); }
+          },
+        });
+        const dark = document.documentElement.dataset.theme === 'dark'
+          || (!document.documentElement.dataset.theme && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        google.accounts.id.renderButton(box, { theme: dark ? 'filled_black' : 'outline', size: 'large', text: 'signin_with', shape: 'pill', locale: 'es', width: 280 });
+      }).catch((e) => {
+        const box = $('#google-btn');
+        if (box) box.innerHTML = `<span class="small neg">${esc(e.message)}</span>`;
+      });
+    }
+
+    if (withPassword) {
+      const form = $('#login-form');
+      if (!withGoogle) $('#login-user').focus();
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const btn = $('button[type="submit"]', form);
+        btn.disabled = true;
+        $('#login-error').hidden = true;
+        try {
+          const r = await window.Remote.login($('#login-user').value.trim(), $('#login-pass').value);
+          await afterLogin(r);
+        } catch (ex) {
+          showError(ex.message);
+          btn.disabled = false;
+        }
+      });
+    }
   }
 
   async function loadFromServer() {
@@ -1751,6 +1816,7 @@
     try {
       const me = await window.Remote.me();
       sync.user = me.user;
+      sync.email = me.email || '';
       await loadFromServer();
     } catch (e) {
       if (e.status === 401) { showLogin(); return; }
@@ -1914,7 +1980,8 @@
     'logout': async () => {
       if (sync.pending || sync.saving) { toast('Espera a que se guarden los cambios antes de salir.', 4000); return; }
       try { await window.Remote.logout(); } catch (e) { /* la sesión ya no existe */ }
-      Object.assign(sync, { user: null, ready: false, version: 0 });
+      if (window.google && window.google.accounts) window.google.accounts.id.disableAutoSelect();
+      Object.assign(sync, { user: null, email: '', ready: false, version: 0 });
       S = window.Store.emptyState();
       showLogin();
     },

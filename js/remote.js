@@ -34,7 +34,9 @@
 
   root.Remote = {
     enabled: base !== '',
+    authConfig: () => call('auth_config'),
     me: () => call('me'),
+    loginGoogle: (credential) => call('login_google', { method: 'POST', body: { credential } }),
     login: (username, password) => call('login', { method: 'POST', body: { username, password } }),
     logout: () => call('logout', { method: 'POST', body: {} }),
     load: (since) => call('state', { params: since == null ? {} : { since } }),

@@ -268,3 +268,7 @@ textarea { resize: vertical; }
 .login { max-width: 380px; margin: 40px auto; }
 .login h1 { margin-bottom: 4px; }
 @media (max-width: 640px) { .sync { margin-left: 0; } }
+
+.google-btn { display: flex; justify-content: center; min-height: 44px; align-items: center; margin-top: 16px; }
+.login-or { text-align: center; margin: 16px 0 0; display: flex; align-items: center; gap: 10px; }
+.login-or::before, .login-or::after { content: ""; flex: 1; border-top: 1px solid var(--grid); }
