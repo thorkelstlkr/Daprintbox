@@ -50,9 +50,13 @@
   // Tipos de trabajo y de máquina
   const KINDS = { '3d': 'Impresión 3D', laser: 'Corte y grabado láser', sello: 'Sello personalizado' };
   const KIND_SHORT = { '3d': '3D', laser: 'Láser', sello: 'Sello', otros: 'Otras ventas' };
-  const MACHINE_TYPES = { '3d': 'Impresora 3D', laser: 'Láser', otra: 'Otra' };
+  const MACHINE_TYPES = { '3d': 'Impresora 3D', laser: 'Láser', insoladora: 'Insoladora', otra: 'Otra' };
   const machineType = (m) => (m && m.type) || '3d';
-  const machineForKind = (kind) => (kind === '3d' ? '3d' : 'laser');
+  const machineForKind = (kind) => ({ '3d': '3d', laser: 'laser', sello: 'insoladora' }[kind] || '3d');
+  const kindForMachine = (m) => ({ laser: 'laser', insoladora: 'sello' }[machineType(m)] || '3d');
+  // Materiales típicos de un sello de fotopolímero: la plancha y el negativo (fotolito)
+  const isPhotopolymer = (m) => /fotopol/i.test(`${m.category} ${m.name}`);
+  const isNegative = (m) => /fotolito|negativo|acetato/i.test(`${m.category} ${m.name}`);
   const { componentUnitCost, componentsUsed } = window.Calc;
   const compLow = (c) => num(c.stock) <= (c.lowStock === '' || c.lowStock == null ? 0 : num(c.lowStock));
   const fmtQty = (q, unit) => `${fmtNum(q, 2)} ${unit || 'ud.'}`;
@@ -241,7 +245,7 @@
         <div class="filters">${periodSelect('period', ui.period)}</div>
       </div>
       ${empty ? `<div class="card"><h2>Bienvenido 👋</h2>
-        <p>Empieza añadiendo tus <b>máquinas</b> (impresoras 3D, láser) y tus <b>materiales</b> (filamento, planchas, componentes), registra cada <b>trabajo</b> —impresión 3D, corte o grabado láser, sello— para calcular su coste y descontar el material, y apunta tus <b>ventas</b> para ver tu beneficio real.</p>
+        <p>Empieza añadiendo tus <b>máquinas</b> (impresoras 3D, láser, insoladora) y tus <b>materiales</b> (filamento, planchas, componentes), registra cada <b>trabajo</b> —impresión 3D, corte o grabado láser, sello— para calcular su coste y descontar el material, y apunta tus <b>ventas</b> para ver tu beneficio real.</p>
         <div class="filters"><button class="btn primary" data-action="new-printer">Añadir máquina</button>
         <button class="btn" data-action="new-filament">Añadir filamento</button>
         <button class="btn" data-action="load-demo">Cargar datos de ejemplo</button></div></div>` : ''}
@@ -514,7 +518,7 @@
 
   // ================================================================ MATERIALES EN PLANCHA
 
-  const MATERIAL_CATEGORIES = ['Madera', 'Contrachapado', 'MDF', 'Metacrilato', 'Cuero', 'Goma para sellos', 'Cartón', 'Corcho', 'Tela', 'Papel', 'Vidrio', 'Metal', 'Otros'];
+  const MATERIAL_CATEGORIES = ['Madera', 'Contrachapado', 'MDF', 'Metacrilato', 'Cuero', 'Fotopolímero', 'Fotolito / negativo', 'Goma para sellos', 'Cartón', 'Corcho', 'Tela', 'Papel', 'Vidrio', 'Metal', 'Otros'];
 
   function viewMaterials() {
     const list = [...S.materials].sort((a, b) => (a.category || '').localeCompare(b.category || '') || a.name.localeCompare(b.name));
@@ -527,7 +531,7 @@
         <h1>Materiales en plancha</h1>
         <div class="actions"><button class="btn primary" data-action="new-material">+ Nuevo material</button></div>
       </div>
-      <p class="small muted" style="margin-top:-8px">Para corte y grabado láser y sellos: madera, MDF, metacrilato, cuero, goma para sellos… El coste se calcula por cm² según las medidas de cada pieza, más un ${fmtNum(S.settings.sheetWaste)} % de desperdicio (cámbialo en Ajustes).</p>
+      <p class="small muted" style="margin-top:-8px">Para corte y grabado láser (madera, MDF, metacrilato, cuero…) y sellos de insoladora (plancha de fotopolímero y fotolito/negativo). El coste se calcula por cm² según las medidas de cada pieza, más un ${fmtNum(S.settings.sheetWaste)} % de desperdicio (cámbialo en Ajustes).</p>
       <div class="card">
         ${list.length ? `<div class="table-wrap"><table>
           <thead><tr><th>Material</th><th class="num">Plancha</th><th class="num">Precio</th><th class="num">€/cm²</th><th class="num">Stock</th><th class="num">Usado</th><th class="num">Valor</th><th></th></tr></thead>
@@ -545,7 +549,7 @@
               <button class="icon-btn" data-action="delete-material" data-id="${m.id}" aria-label="Eliminar" title="Eliminar">🗑</button>
             </td></tr>`).join('')}</tbody>
           <tfoot><tr><td colspan="6">Total</td><td class="num">${money(total)}</td><td></td></tr></tfoot>
-        </table></div>` : `<div class="empty">Aún no tienes materiales en plancha. Añade, por ejemplo, contrachapado de 3 mm o goma para sellos.</div>`}
+        </table></div>` : `<div class="empty">Aún no tienes materiales en plancha. Añade, por ejemplo, contrachapado de 3 mm o fotopolímero para sellos.</div>`}
       </div>`;
   }
 
@@ -783,7 +787,7 @@
                 <button class="icon-btn" data-action="delete-printer" data-id="${pr.id}" aria-label="Eliminar" title="Eliminar">🗑</button>
               </td></tr>`;
           }).join('')}</tbody>
-        </table></div>` : `<div class="empty">Añade tus impresoras 3D y máquinas láser para que cada trabajo use su propio consumo, amortización y mantenimiento.</div>`}
+        </table></div>` : `<div class="empty">Añade tus impresoras 3D, láser e insoladora para que cada trabajo use su propio consumo, amortización y mantenimiento.</div>`}
       </div>
       <p class="small muted">Coste / hora = amortización (precio ÷ vida útil) + mantenimiento + electricidad (consumo × ${money(S.settings.kwhPrice)}/kWh). Ingresos y beneficio salen de las ventas de los trabajos hechos en cada máquina. Cambiar una máquina no modifica el coste de trabajos ya registrados. «Predeterminada» es la que se elige por defecto para impresión 3D.</p>`;
   }
@@ -797,10 +801,10 @@
       body: `<div class="form-grid">
         ${field('Nombre *', inp('name', pr.name, 'required placeholder="Ej. Bambu Lab P1S, xTool S1…"'), { wide: true })}
         ${field('Tipo', `<select name="type">${Object.entries(MACHINE_TYPES).map(([k, v]) => `<option value="${k}"${k === machineType(pr) ? ' selected' : ''}>${v}</option>`).join('')}</select>`)}
-        ${field('Consumo medio (W) *', numInp('watts', pr.watts, 'required min="0"'), { hint: 'Incluye extractor y air assist en láser. Impresora 3D ≈ 80–150 W.' })}
+        ${field('Consumo medio (W) *', numInp('watts', pr.watts, 'required min="0"'), { hint: 'Láser: incluye extractor y air assist. Impresora 3D ≈ 80–150 W. Insoladora UV ≈ 20–60 W.' })}
         ${field('Precio de compra *', numInp('price', pr.price, 'required min="0"'))}
         ${field('Vida útil estimada (h) *', numInp('lifeHours', pr.lifeHours, 'required min="1"'), { hint: 'Horas en las que la amortizas.' })}
-        ${field('Mantenimiento (/h)', numInp('maintenancePerHour', pr.maintenancePerHour, 'min="0"'), { hint: 'Boquillas, lentes, filtros, tubo láser…' })}
+        ${field('Mantenimiento (/h)', numInp('maintenancePerHour', pr.maintenancePerHour, 'min="0"'), { hint: 'Boquillas, lentes, filtros, tubos UV…' })}
         ${field('Notas', inp('notes', pr.notes, 'placeholder="Boquilla 0.4, módulo 20 W…"'), { wide: true })}
         ${isNew ? `${field('Fecha de compra', `<input type="date" name="date" value="${today()}">`)}
           <div class="field wide"><label class="check"><input type="checkbox" name="asExpense"> Registrar la compra como gasto (Máquinas y herramientas)</label></div>` : ''}
@@ -902,8 +906,8 @@
     }
     const dp = defaultPrinter();
     const firstOf = (type) => S.printers.find((m) => machineType(m) === type);
-    const startKind = p ? (p.kind || '3d') : (dp && machineType(dp) === 'laser' ? 'laser' : '3d');
-    const startMachine = startKind === '3d' ? (dp && machineType(dp) === '3d' ? dp : firstOf('3d')) : firstOf('laser');
+    const startKind = p ? (p.kind || '3d') : (dp ? kindForMachine(dp) : '3d');
+    const startMachine = (dp && machineType(dp) === machineForKind(startKind)) ? dp : firstOf(machineForKind(startKind));
     p = p || { kind: startKind, printerId: (startMachine || dp || {}).id || '', components: [], sheets: [], name: '', date: today(), quantity: 1, hours: 2, items: [{ filamentId: S.filaments[0] ? S.filaments[0].id : '', grams: 50 }], laborHours: 0, extras: 0, margin: '', notes: '', stockDeducted: true };
     const h = Math.floor(num(p.hours)), m = Math.round((num(p.hours) - h) * 60);
     const printerMissing = !isNew && p.printerId && !findPrinter(p.printerId);
@@ -919,6 +923,17 @@
         <input name="item-grams" type="number" step="any" min="0" value="${esc(it.grams)}" aria-label="Gramos" placeholder="g">
         <button type="button" class="icon-btn" data-remove-item aria-label="Quitar">✕</button></div>`;
 
+    /** Filas de plancha propuestas según el tipo: sello = fotopolímero + fotolito; láser = primer material de corte. */
+    const defaultSheets = (kind) => {
+      if (!S.materials.length) return [];
+      if (kind === 'sello') {
+        const rows = [S.materials.find(isPhotopolymer), S.materials.find(isNegative)].filter(Boolean)
+          .map((mt) => ({ materialId: mt.id, width: 40, height: 40 }));
+        return rows.length ? rows : [{ materialId: S.materials[0].id, width: 40, height: 40 }];
+      }
+      const mt = S.materials.find((x) => !isPhotopolymer(x) && !isNegative(x)) || S.materials[0];
+      return [{ materialId: mt.id, width: 100, height: 100 }];
+    };
     const materialOptions = (selected) => `<option value="">— Elige material —</option>` + S.materials
       .map((m) => `<option value="${m.id}"${m.id === selected ? ' selected' : ''}>${esc(materialLabel(m))} · ${money(sheetCostPerCm2(m) * 100)}/100 cm² (${fmtNum(m.stock, 2)} pl.)</option>`).join('');
     const sheetRow = (it) => `<div class="sheet-row">
@@ -944,7 +959,7 @@
           ${field('Fecha', `<input type="date" name="date" value="${esc(p.date)}">`)}
           ${field('Unidades producidas', numInp('quantity', p.quantity, 'min="1" step="1"'), { hint: 'Piezas que salen de este trabajo.' })}
           ${field('Horas', numInp('h', h, 'min="0" step="1"'))}
-          ${field('Minutos', numInp('m', m, 'min="0" max="59" step="1"'), { hint: 'Tiempo total de máquina.' })}
+          ${field('Minutos', numInp('m', m, 'min="0" max="59" step="1"'), { hint: '<span id="time-hint">Tiempo total de máquina.</span>' })}
         </div>
         <div id="sec-fil">
           <h3 class="section-title">Filamento usado (gramos totales, según el laminador)</h3>
@@ -954,9 +969,9 @@
         </div>
         <div id="sec-sheet">
           <h3 class="section-title">Material en plancha (medidas de cada pieza)</h3>
-          ${S.materials.length ? `<div class="items-list" id="sheets">${((p.sheets || []).length ? p.sheets : [{ materialId: S.materials[0].id, width: 100, height: 100 }]).map(sheetRow).join('')}</div>
+          ${S.materials.length ? `<div class="items-list" id="sheets">${((p.sheets || []).length ? p.sheets : defaultSheets(p.kind || '3d')).map(sheetRow).join('')}</div>
             <button type="button" class="btn small" id="add-sheet" style="margin-top:8px">+ Añadir otro material</button>
-            <p class="small muted" style="margin:6px 0 0">Ancho × alto en mm que ocupa cada pieza en la plancha; se suma un ${fmtNum(S.settings.sheetWaste)} % de desperdicio.</p>`
+            <p class="small muted" style="margin:6px 0 0">Ancho × alto en mm que ocupa cada pieza en la plancha; se suma un ${fmtNum(S.settings.sheetWaste)} % de desperdicio. En sellos añade el fotopolímero y el fotolito (negativo).</p>`
             : `<p class="small muted">Da de alta madera, metacrilato, goma para sellos… en <a href="#materials" data-close-link>Materiales</a> para sumarlos al coste.</p>`}
         </div>
         <h3 class="section-title">Componentes externos (cantidad por pieza)</h3>
@@ -975,10 +990,19 @@
       onOpen: (b) => {
         const kindSel = $('[name="kind"]', b);
         const machineSel = $('[name="printerId"]', b);
+        let sheetsTouched = !isNew;
+        const sheetsBox = $('#sheets', b);
+        if (sheetsBox) sheetsBox.addEventListener('input', () => { sheetsTouched = true; });
+        const TIME_HINTS = {
+          '3d': 'Tiempo total de impresión.',
+          laser: 'Tiempo de corte y grabado.',
+          sello: 'Insolado + post-exposición en la insoladora. El lavado y secado van en mano de obra.',
+        };
         const showSections = () => {
           const k = kindSel.value;
           $('#sec-fil', b).hidden = k !== '3d';
           $('#sec-sheet', b).hidden = k === '3d';
+          $('#time-hint', b).textContent = TIME_HINTS[k];
         };
         kindSel.addEventListener('change', () => {
           // proponer una máquina acorde al tipo de trabajo
@@ -988,6 +1012,8 @@
             const alt = S.printers.find((x) => machineType(x) === want);
             if (alt) machineSel.value = alt.id;
           }
+          // proponer los materiales típicos del tipo mientras el usuario no los haya tocado
+          if (sheetsBox && !sheetsTouched) sheetsBox.innerHTML = defaultSheets(kindSel.value).map(sheetRow).join('');
           showSections();
         });
         showSections();
@@ -1044,7 +1070,7 @@
               <dt>Mano de obra</dt><dd>${money(c.labor)}</dd>
               <dt>Extras</dt><dd>${money(c.extras)}</dd>
               <dt>Margen de fallos (${fmtNum(S.settings.failureRate)} %)</dt><dd>${money(c.failure)}</dd>
-              <dt class="total">Coste total (${c.quantity} uds.)</dt><dd class="total">${money(c.total)}</dd>
+              <dt class="total">Coste total (${c.quantity} ${c.quantity === 1 ? 'ud.' : 'uds.'})</dt><dd class="total">${money(c.total)}</dd>
             </dl>
             <div class="price-box">
               <div><div class="small muted">Coste por unidad</div><strong>${money(c.unit)}</strong></div>
@@ -1429,6 +1455,7 @@
     const f4 = { id: uid(), name: 'TPU Rojo', material: 'TPU', color: '#c62828', colorName: 'Rojo', brand: 'Overture', diameter: '1.75', spoolWeight: 500, price: 18, remaining: 0, lowStock: 100 };
     const pr1 = { id: uid(), type: '3d', name: 'Bambu Lab P1S', notes: 'Cerrada · AMS', watts: 110, price: 699, lifeHours: 6000, maintenancePerHour: 0.08 };
     const pr3 = { id: uid(), type: 'laser', name: 'xTool S1 20 W', notes: 'Diodo 20 W · air assist · extractor', watts: 160, price: 1099, lifeHours: 10000, maintenancePerHour: 0.12 };
+    const pr4 = { id: uid(), type: 'insoladora', name: 'Insoladora UV A4', notes: 'Tubos UV-A · exposición y post-exposición', watts: 40, price: 320, lifeHours: 3000, maintenancePerHour: 0.06 };
     const pr2 = { id: uid(), type: '3d', name: 'Creality Ender 3 V3', notes: 'Boquilla 0.4', watts: 150, price: 229, lifeHours: 4000, maintenancePerHour: 0.05 };
     st.defaultPrinterId = pr1.id;
     const c1 = { id: uid(), name: 'Tira LED USB blanco cálido', category: 'Iluminación', unit: 'ud.', price: 5.99, packUnits: 1, stock: 0, lowStock: 2, supplier: 'Amazon' };
@@ -1439,13 +1466,15 @@
     const c6 = { id: uid(), name: 'Almohadilla de tinta negra', category: 'Sellos', unit: 'ud.', price: 3.5, packUnits: 1, stock: 0, lowStock: 2, supplier: 'Papelería' };
     const m1 = { id: uid(), name: 'Contrachapado de abedul', category: 'Contrachapado', thickness: 3, sheetWidth: 600, sheetHeight: 400, price: 4.8, stock: 0, lowStock: 2, supplier: 'Maderas del Sur' };
     const m2 = { id: uid(), name: 'Metacrilato transparente', category: 'Metacrilato', thickness: 3, sheetWidth: 600, sheetHeight: 400, price: 11.5, stock: 0, lowStock: 1, supplier: 'Plásticos Levante' };
-    const m3 = { id: uid(), name: 'Goma láser para sellos', category: 'Goma para sellos', thickness: 2.3, sheetWidth: 297, sheetHeight: 210, price: 8.9, stock: 0, lowStock: 1, supplier: 'Trotec' };
+    const m3 = { id: uid(), name: 'Fotopolímero para sellos', category: 'Fotopolímero', thickness: 1.7, sheetWidth: 297, sheetHeight: 210, price: 9.5, stock: 0, lowStock: 1, supplier: 'Sellos Pro' };
+    const m5 = { id: uid(), name: 'Fotolito (acetato impreso)', category: 'Fotolito / negativo', thickness: 0, sheetWidth: 297, sheetHeight: 210, price: 0.6, stock: 0, lowStock: 3, supplier: 'Copistería' };
     const m4 = { id: uid(), name: 'Cuero vegetal', category: 'Cuero', thickness: 2, sheetWidth: 300, sheetHeight: 300, price: 14, stock: 0, lowStock: 1, supplier: 'Curtidos Ubrique' };
-    const state = { version: 1, demo: true, settings: st, printers: [pr1, pr2, pr3], materials: [m1, m2, m3, m4], components: [c1, c2, c3, c4, c5, c6], filaments: [f1, f2, f3, f4], prints: [], sales: [], expenses: [] };
+    const state = { version: 1, demo: true, settings: st, printers: [pr1, pr2, pr3, pr4], materials: [m1, m2, m3, m4, m5], components: [c1, c2, c3, c4, c5, c6], filaments: [f1, f2, f3, f4], prints: [], sales: [], expenses: [] };
     state.expenses.push({ id: uid(), date: d(0, 1), category: 'maquinaria', description: 'Impresora Creality Ender 3 V3', amount: 229, printerId: pr2.id });
     state.expenses.push({ id: uid(), date: d(1, 5), category: 'maquinaria', description: 'Láser xTool S1 20 W', amount: 1099, printerId: pr3.id });
+    state.expenses.push({ id: uid(), date: d(2, 2), category: 'maquinaria', description: 'Insoladora UV A4', amount: 320, printerId: pr4.id });
     const buyM = (m, n, date) => { m.stock += n; state.expenses.push({ id: uid(), date, category: 'materiales', description: `${fmtSheets(n)} · ${materialLabel(m)}`, amount: n * m.price, materialId: m.id }); };
-    buyM(m1, 10, d(1, 6)); buyM(m2, 3, d(1, 6)); buyM(m3, 4, d(2, 3)); buyM(m4, 2, d(3, 10)); buyM(m1, 5, d(4, 15));
+    buyM(m1, 10, d(1, 6)); buyM(m2, 3, d(1, 6)); buyM(m3, 4, d(2, 3)); buyM(m5, 10, d(2, 3)); buyM(m4, 2, d(3, 10)); buyM(m1, 5, d(4, 15));
     const buy = (f, n, date) => { f.remaining += n * f.spoolWeight; state.expenses.push({ id: uid(), date, category: 'filamento', description: `${n} × ${filamentLabel(f)}`, amount: n * f.price, filamentId: f.id }); };
     const buyC = (c, packs, date) => { c.stock += packs * c.packUnits; state.expenses.push({ id: uid(), date, category: 'componentes', description: `${packs} × ${c.name}`, amount: packs * c.price, componentId: c.id }); };
     buyC(c5, 1, d(2, 3)); buyC(c6, 5, d(2, 3));
@@ -1483,9 +1512,10 @@
     const l3 = L('Llaveros de cuero grabados', d(3, 18), 20, 1, [[m4, 70, 35]], { labor: 1, components: [[c3, 1]] });
     const l4 = L('Cajas regalo de madera', d(4, 6), 4, 2, [[m1, 300, 200]], { labor: 1 });
     const l5 = L('Adornos navideños personalizados', d(5, 3), 30, 1.25, [[m1, 80, 80]], { labor: 1 });
-    const s1 = L('Sello logo empresa', d(2, 8), 1, 0.3, [[m3, 40, 40]], { kind: 'sello', labor: 0.75, components: [[c5, 1]] });
-    const s2 = L('Sellos boda (iniciales)', d(3, 25), 3, 0.5, [[m3, 50, 50]], { kind: 'sello', labor: 1, components: [[c5, 1], [c6, 1]] });
-    const s3 = L('Sello «Pagado» para tienda', d(5, 6), 2, 0.25, [[m3, 60, 25]], { kind: 'sello', labor: 0.5, components: [[c5, 1]] });
+    const ST = (name, date, qty, hours, w, h, extra = {}) => print(name, date, qty, hours, [], { kind: 'sello', printer: pr4, sheets: [[m3, w, h], [m5, w, h]], ...extra });
+    const s1 = ST('Sello logo empresa', d(2, 8), 1, 0.2, 40, 40, { labor: 0.75, components: [[c5, 1]] });
+    const s2 = ST('Sellos boda (iniciales)', d(3, 25), 3, 0.25, 50, 50, { labor: 1, components: [[c5, 1], [c6, 1]] });
+    const s3 = ST('Sello «Pagado» para tienda', d(5, 6), 2, 0.2, 60, 25, { labor: 0.5, components: [[c5, 1]] });
     sell(l1, d(1, 16), 12, 3.5, 3.9, 'Bar La Terraza', 'Directo');
     sell(l2, d(2, 19), 1, 38, 4.6, 'Sara', 'Etsy');
     sell(l3, d(3, 26), 15, 6, 5.1, 'Moto Club', 'Directo');
