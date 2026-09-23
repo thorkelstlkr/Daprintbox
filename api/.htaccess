@@ -1,0 +1,13 @@
+# Daprintbox · protección de la carpeta de la API (Apache / LiteSpeed)
+Options -Indexes
+
+# config.php (contraseñas) y lib.php nunca se sirven directamente
+<FilesMatch "^(config\.php|config\.example\.php|lib\.php)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>

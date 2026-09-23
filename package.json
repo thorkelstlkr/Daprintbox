@@ -6,7 +6,8 @@
   "scripts": {
     "test": "node --test tests/*.test.js",
     "start": "python3 -m http.server 8080",
-    "build": "node scripts/build-single.js"
+    "build": "node scripts/build-single.js",
+    "package": "node scripts/package-server.js"
   },
   "license": "MIT"
 }

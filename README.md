@@ -27,6 +27,16 @@ Los datos se guardan en el `localStorage` del navegador. Desde **Ajustes** puede
 
 Si ya usabas una versión anterior, la impresora que tenías en Ajustes se convierte automáticamente en tu primera máquina y los trabajos existentes se consideran de impresión 3D.
 
+## Usarla entre varias personas (servidor con PHP + MySQL)
+
+La app puede guardar los datos en una base de datos MySQL de tu servidor para que varias personas trabajen con los mismos datos, cada una con su usuario y contraseña. Incluye aviso cuando dos personas guardan a la vez, actualización automática de los cambios de los demás e historial de versiones para restaurar.
+
+```bash
+npm run package   # crea dist/daprintbox-servidor.zip listo para subir
+```
+
+Los pasos (crear la base de datos, subir los archivos, `api/config.php`, `api/setup.php` para crear usuarios) están en **[INSTALACION.md](INSTALACION.md)**.
+
 ## Cómo se calcula el coste
 
 | Concepto | Fórmula |
@@ -51,8 +61,11 @@ En el resumen:
 index.html      estructura
 css/styles.css  estilos (tema claro/oscuro)
 js/calc.js      cálculos puros (probados)
-js/store.js     persistencia
+js/store.js     persistencia local
+js/remote.js    cliente de la API del servidor
+js/config.js    apiUrl: '' (navegador) o 'api/api.php' (servidor)
 js/app.js       vistas y formularios
+api/            API en PHP + MySQL (api.php, setup.php, config.example.php)
 tests/          tests de los cálculos
 ```
 

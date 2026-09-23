@@ -257,3 +257,14 @@ textarea { resize: vertical; }
 .badge.kind-3d::before { background: var(--series-1); }
 .badge.kind-laser::before { background: var(--series-2); }
 .badge.kind-sello::before { background: var(--series-3); }
+
+/* Estado de sincronización con el servidor */
+.sync { margin-left: auto; display: flex; align-items: center; gap: 6px; font-size: .8rem; color: var(--ink-2); white-space: nowrap; }
+.sync .muted { color: var(--muted); }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: none; }
+.dot.ok { background: var(--good-mark); }
+.dot.saving { background: var(--warning); }
+.dot.error { background: var(--critical); }
+.login { max-width: 380px; margin: 40px auto; }
+.login h1 { margin-bottom: 4px; }
+@media (max-width: 640px) { .sync { margin-left: 0; } }

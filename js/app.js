@@ -28,6 +28,10 @@
   const moneySigned = (v) => `<span class="${v < 0 ? 'neg' : v > 0 ? 'pos' : ''}">${money(v)}</span>`;
   const fmtNum = (v, d = 0) => new Intl.NumberFormat('es-ES', { maximumFractionDigits: d, minimumFractionDigits: 0 }).format(num(v));
   const fmtGrams = (g) => (Math.abs(num(g)) >= 1000 ? fmtNum(num(g) / 1000, 2) + ' kg' : fmtNum(g) + ' g');
+  const fmtDateTime = (dt) => {
+    const d = new Date(String(dt).replace(' ', 'T'));
+    return isNaN(d) ? String(dt) : d.toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+  };
   const fmtDate = (d) => (d ? new Date(d + 'T00:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' }) : '');
   const fmtHours = (h) => {
     const total = Math.round(num(h) * 60);
@@ -103,19 +107,29 @@
 
   // ---------------------------------------------------------------- persistencia
 
+  // Modo servidor: los datos se guardan en MySQL a través de api/api.php (ver js/config.js)
+  const remote = !!(window.Remote && window.Remote.enabled);
+  const sync = { ready: false, user: null, version: 0, pending: false, saving: false, error: '', updatedBy: '', updatedAt: '' };
+
   function persist(msg) {
+    if (remote) {
+      sync.ready = true;
+      render();
+      queueSave(msg);
+      return;
+    }
     if (!window.Store.save(S)) toast('No se pudo guardar en este navegador. Exporta una copia desde Ajustes.');
     else if (msg) toast(msg);
     render();
   }
 
   let toastTimer;
-  function toast(msg) {
+  function toast(msg, ms = 2600) {
     const el = $('#toast');
     el.textContent = msg;
     el.classList.add('show');
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => el.classList.remove('show'), 2600);
+    toastTimer = setTimeout(() => el.classList.remove('show'), ms);
   }
 
   /** Suma (sign=+1) o descuenta (sign=-1) del stock los gramos de un trabajo. */
@@ -154,7 +168,7 @@
   const modal = $('#modal');
   let modalSubmit = null;
 
-  function openModal({ title, body, submitLabel = 'Guardar', onOpen, onSubmit }) {
+  function openModal({ title, body, submitLabel = 'Guardar', onOpen, onSubmit, hideCancel = false }) {
     $('#modal-title').textContent = title;
     // cuerpo nuevo en cada apertura para no acumular listeners de formularios anteriores
     const old = $('#modal-body');
@@ -162,8 +176,9 @@
     old.replaceWith(fresh);
     fresh.innerHTML = body;
     $('#modal-submit').textContent = submitLabel;
+    $('.modal-foot [data-close]', modal).hidden = hideCancel;
     modalSubmit = onSubmit;
-    modal.showModal();
+    if (!modal.open) modal.showModal();
     if (onOpen) onOpen($('#modal-body'));
     const first = $('#modal-body input, #modal-body select');
     if (first) first.focus();
@@ -1335,9 +1350,19 @@
         <div class="filters">${field('Tema', `<select id="theme-select">${[['auto', 'Automático'], ['light', 'Claro'], ['dark', 'Oscuro']].map(([k, v]) => `<option value="${k}"${k === theme ? ' selected' : ''}>${v}</option>`).join('')}</select>`)}</div>
       </div>
 
+      ${remote ? `<div class="card">
+        <h2>Servidor compartido</h2>
+        <p class="small">Has entrado como <b>${esc(sync.user || '')}</b>. Los datos se guardan en el servidor y los ve todo el equipo.</p>
+        <p class="small muted">Versión ${fmtNum(sync.version)}${sync.updatedBy ? ` · último cambio de ${esc(sync.updatedBy)}${sync.updatedAt ? ' el ' + esc(fmtDateTime(sync.updatedAt)) : ''}` : ''}</p>
+        <div class="filters">
+          <button class="btn" data-action="history">Historial de versiones</button>
+          <button class="btn" data-action="logout">Cerrar sesión</button>
+        </div>
+      </div>` : ''}
+
       <div class="card">
         <h2>Datos</h2>
-        <p class="small muted">Los datos se guardan en este navegador. Guarda una copia de seguridad a menudo para no perderlos o para pasarlos a otro dispositivo. Si los botones de descarga no hacen nada (algunos visores web los bloquean), usa «Copia en texto».</p>
+        <p class="small muted">${remote ? 'Además del historial del servidor, puedes guardar tus propias copias.' : 'Los datos se guardan en este navegador.'} Guarda una copia de seguridad a menudo para no perderlos o para pasarlos a otro dispositivo. Si los botones de descarga no hacen nada (algunos visores web los bloquean), usa «Copia en texto».</p>
         <div class="filters">
           <button class="btn" data-action="backup-text">Copia en texto (copiar / pegar)</button>
           <button class="btn" data-action="export-json">⬇ Exportar copia (JSON)</button>
@@ -1532,12 +1557,226 @@
     return state;
   }
 
+  // ================================================================ SERVIDOR (datos compartidos)
+
+  let saveChain = Promise.resolve();
+
+  /** Encola un guardado del estado actual; los guardados van de uno en uno. */
+  function queueSave(msg) {
+    sync.pending = true;
+    updateSyncBadge();
+    saveChain = saveChain.then(() => doSave(msg));
+  }
+
+  async function doSave(msg) {
+    if (!sync.pending || !sync.user) return;
+    sync.pending = false;
+    sync.saving = true;
+    updateSyncBadge();
+    try {
+      const r = await window.Remote.save(S, sync.version);
+      Object.assign(sync, { version: r.version, updatedBy: r.updated_by, updatedAt: r.updated_at, error: '' });
+      if (msg) toast(msg);
+    } catch (e) {
+      if (e.status === 409 && e.data) {
+        // Otra persona guardó antes: se cargan sus datos para no pisarlos
+        applyRemote(e.data);
+        toast(`${e.data.updated_by || 'Otra persona'} guardó cambios justo antes: se han cargado sus datos. Repite tu último cambio.`, 8000);
+      } else if (e.status === 401) {
+        Object.assign(sync, { pending: true, error: 'Sesión caducada' });
+        showLogin('Tu sesión ha caducado. Vuelve a entrar y se guardarán tus cambios.');
+      } else {
+        Object.assign(sync, { pending: true, error: e.message });
+        toast(`No se pudo guardar en el servidor: ${e.message}`, 6000);
+      }
+    } finally {
+      sync.saving = false;
+      updateSyncBadge();
+    }
+  }
+
+  function applyRemote(r) {
+    S = window.Store.normalize(r.data || {});
+    Object.assign(sync, { version: r.version, updatedBy: r.updated_by || '', updatedAt: r.updated_at || '', pending: false, error: '' });
+    sync.ready = true;
+    render();
+    updateSyncBadge();
+  }
+
+  /** Comprueba si otra persona ha guardado cambios y, si es así, los carga. */
+  async function pollRemote() {
+    if (!remote || !sync.ready || !sync.user || sync.pending || sync.saving || modal.open || document.hidden) return;
+    try {
+      const r = await window.Remote.load(sync.version);
+      if (r.unchanged || sync.pending || sync.saving || modal.open) return;
+      applyRemote(r);
+      toast(`Datos actualizados: ${r.updated_by || 'otra persona'} hizo cambios.`, 4000);
+    } catch (e) {
+      if (e.status === 401) showLogin('Tu sesión ha caducado. Vuelve a entrar.');
+    }
+  }
+
+  function updateSyncBadge() {
+    if (!remote) return;
+    let el = $('#sync');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'sync';
+      el.className = 'sync';
+      el.setAttribute('role', 'status');
+      $('.topbar').appendChild(el);
+    }
+    if (!sync.user) { el.innerHTML = ''; return; }
+    const [cls, label] = sync.saving ? ['saving', 'Guardando…'] : sync.pending ? ['error', sync.error ? 'Sin guardar' : 'Pendiente'] : ['ok', 'Guardado'];
+    el.innerHTML = `<span class="dot ${cls}" aria-hidden="true"></span><span>${label}</span><span class="muted">· ${esc(sync.user)}</span>
+      ${sync.pending && !sync.saving && sync.error ? '<button class="btn small" id="retry-save">Reintentar</button>' : ''}`;
+    const retry = $('#retry-save');
+    if (retry) retry.addEventListener('click', () => queueSave('Cambios guardados'));
+  }
+
+  function showLogin(message) {
+    sync.ready = false;
+    $('.tabs').hidden = true;
+    updateSyncBadge();
+    view.innerHTML = `<form class="card login" id="login-form" novalidate>
+      <h1>Daprintbox</h1>
+      <p class="small muted">Entra con tu usuario para ver y guardar los datos compartidos del taller.</p>
+      ${message ? `<p class="small neg">${esc(message)}</p>` : ''}
+      <div class="form-grid" style="grid-template-columns:1fr">
+        <div class="field"><label for="login-user">Usuario</label><input id="login-user" name="username" autocomplete="username" required></div>
+        <div class="field"><label for="login-pass">Contraseña</label><input id="login-pass" name="password" type="password" autocomplete="current-password" required></div>
+      </div>
+      <p class="small neg" id="login-error" hidden></p>
+      <button class="btn primary" type="submit" style="margin-top:12px">Entrar</button>
+    </form>`;
+    const form = $('#login-form');
+    $('#login-user').focus();
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = $('button[type="submit"]', form);
+      const err = $('#login-error');
+      btn.disabled = true;
+      err.hidden = true;
+      try {
+        const r = await window.Remote.login($('#login-user').value.trim(), $('#login-pass').value);
+        sync.user = r.user;
+        $('.tabs').hidden = false;
+        if (sync.pending) {
+          // había cambios sin guardar antes de caducar la sesión
+          sync.ready = true;
+          render();
+          queueSave('Cambios guardados');
+        } else {
+          await loadFromServer();
+        }
+      } catch (ex) {
+        err.textContent = ex.message;
+        err.hidden = false;
+        btn.disabled = false;
+      }
+    });
+  }
+
+  async function loadFromServer() {
+    const r = await window.Remote.load();
+    $('.tabs').hidden = false;
+    if (!r.data) {
+      sync.version = r.version;
+      showFirstRun();
+      return;
+    }
+    applyRemote(r);
+  }
+
+  /** Base de datos vacía: elegir con qué datos empezar. */
+  function showFirstRun() {
+    sync.ready = false;
+    updateSyncBadge();
+    const local = window.Store.load();
+    const localCount = local.filaments.length + local.materials.length + local.prints.length + local.sales.length + local.expenses.length;
+    const hasLocal = localCount > 0 && !local.demo;
+    view.innerHTML = `<div class="card">
+      <h2>La base de datos está vacía</h2>
+      <p>¿Con qué datos queréis empezar? Lo que elijas se guardará en el servidor y lo verán todos los usuarios.</p>
+      <div class="filters">
+        ${hasLocal ? `<button class="btn primary" data-first="local">Subir los datos de este navegador (${localCount} registros)</button>` : ''}
+        <button class="btn${hasLocal ? '' : ' primary'}" data-first="paste">Pegar una copia en texto</button>
+        <button class="btn" data-first="empty">Empezar vacío</button>
+        <button class="btn" data-first="demo">Datos de ejemplo</button>
+      </div>
+      <p class="small muted">¿Tenéis los datos en otro ordenador? Allí, en Ajustes → «Copia en texto», copiadlos y pegadlos aquí.</p>
+    </div>`;
+    const start = (state, msg) => { S = state; persist(msg); };
+    $$('[data-first]', view).forEach((btn) => btn.addEventListener('click', () => {
+      const kind = btn.dataset.first;
+      if (kind === 'local') start({ ...local, demo: false }, 'Datos subidos al servidor');
+      if (kind === 'empty') start(window.Store.emptyState(), 'Listo: empieza añadiendo tus máquinas y materiales');
+      if (kind === 'demo') start(demoData(), 'Datos de ejemplo cargados');
+      if (kind === 'paste') backupTextForm();
+    }));
+  }
+
+  async function historyForm() {
+    let r;
+    try { r = await window.Remote.history(); } catch (e) { toast(e.message, 5000); return; }
+    openModal({
+      title: 'Historial de versiones',
+      submitLabel: 'Cerrar',
+      hideCancel: true,
+      body: `<p class="small muted">Cada vez que alguien guarda se crea una versión. Si algo se ha borrado o estropeado, restaura una anterior: se guardará como versión nueva y la actual seguirá en el historial.</p>
+        ${r.versions.length ? `<div class="table-wrap"><table>
+          <thead><tr><th class="num">Versión</th><th>Fecha</th><th>Usuario</th><th class="num">Tamaño</th><th></th></tr></thead>
+          <tbody>${r.versions.map((v) => `<tr><td class="num">${v.version}</td><td class="nowrap">${esc(fmtDateTime(v.saved_at))}</td><td>${esc(v.saved_by)}</td>
+            <td class="num">${fmtNum(v.bytes / 1024, 1)} KB</td>
+            <td class="actions">${v.version === sync.version ? '<span class="badge ok">Actual</span>' : `<button type="button" class="btn small" data-restore="${v.version}">Restaurar</button>`}</td></tr>`).join('')}</tbody>
+        </table></div>` : '<p class="muted">Todavía no hay versiones guardadas.</p>'}`,
+      onOpen: (b) => {
+        $$('[data-restore]', b).forEach((btn) => btn.addEventListener('click', async () => {
+          try {
+            const h = await window.Remote.historyGet(btn.dataset.restore);
+            askConfirm(`¿Restaurar la versión ${h.version} (${fmtDateTime(h.saved_at)}, ${h.saved_by})?\nSe guardará como una versión nueva; la actual seguirá en el historial.`, () => {
+              S = window.Store.normalize(h.data);
+              persist(`Versión ${h.version} restaurada`);
+            }, 'Restaurar');
+          } catch (e) { toast(e.message, 5000); }
+        }));
+      },
+      onSubmit: () => {},
+    });
+  }
+
+  async function startRemote() {
+    view.innerHTML = '<div class="empty">Conectando con el servidor…</div>';
+    updateSyncBadge();
+    try {
+      const me = await window.Remote.me();
+      sync.user = me.user;
+      await loadFromServer();
+    } catch (e) {
+      if (e.status === 401) { showLogin(); return; }
+      view.innerHTML = `<div class="card"><h2>No se pudo conectar con el servidor</h2><p class="small">${esc(e.message)}</p>
+        <button class="btn primary" id="retry-connect">Reintentar</button></div>`;
+      $('#retry-connect').addEventListener('click', startRemote);
+    }
+  }
+
+  if (remote) {
+    setInterval(pollRemote, 15000);
+    document.addEventListener('visibilitychange', pollRemote);
+    window.addEventListener('focus', pollRemote);
+    modal.addEventListener('close', () => setTimeout(pollRemote, 300));
+    window.addEventListener('beforeunload', (e) => {
+      if (sync.pending || sync.saving) { e.preventDefault(); e.returnValue = ''; }
+    });
+  }
+
   // ================================================================ ENRUTADO Y EVENTOS
 
   const VIEWS = { dashboard: viewDashboard, filaments: viewFilaments, materials: viewMaterials, components: viewComponents, printers: viewPrinters, prints: viewPrints, sales: viewSales, expenses: viewExpenses, settings: viewSettings };
   const currentView = () => { const v = location.hash.slice(1); return VIEWS[v] ? v : 'dashboard'; };
 
   function render() {
+    if (remote && !sync.ready) return; // pantalla de acceso o de primera carga
     const v = currentView();
     $$('.tabs button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.view === v)));
     view.innerHTML = (S.demo ? `<div class="demo-banner" role="note"><span><b>Datos de ejemplo.</b> Explora la app con libertad; cuando quieras, empieza con los tuyos.</span>
@@ -1671,6 +1910,14 @@
       }, 'Empezar desde cero');
     },
     'backup-text': () => backupTextForm(),
+    'history': () => historyForm(),
+    'logout': async () => {
+      if (sync.pending || sync.saving) { toast('Espera a que se guarden los cambios antes de salir.', 4000); return; }
+      try { await window.Remote.logout(); } catch (e) { /* la sesión ya no existe */ }
+      Object.assign(sync, { user: null, ready: false, version: 0 });
+      S = window.Store.emptyState();
+      showLogin();
+    },
   };
 
   view.addEventListener('click', (e) => {
@@ -1696,12 +1943,15 @@
   $$('.tabs button').forEach((b) => b.addEventListener('click', () => { location.hash = b.dataset.view; }));
   window.addEventListener('hashchange', () => { render(); window.scrollTo(0, 0); });
 
-  // Primera visita: se abre con datos de ejemplo para ver la app funcionando.
-  if (!safeGet('daprintbox:v1')) {
-    S = demoData();
-    window.Store.save(S);
-  }
-
   applyTheme();
-  render();
+  if (remote) {
+    startRemote();
+  } else {
+    // Primera visita: se abre con datos de ejemplo para ver la app funcionando.
+    if (!safeGet('daprintbox:v1')) {
+      S = demoData();
+      window.Store.save(S);
+    }
+    render();
+  }
 })();
