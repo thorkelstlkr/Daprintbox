@@ -40,6 +40,10 @@
 
   const filamentsById = () => Object.fromEntries(S.filaments.map((f) => [f.id, f]));
   const findPrinter = (id) => S.printers.find((x) => x.id === id);
+  const componentsById = () => Object.fromEntries(S.components.map((c) => [c.id, c]));
+  const { componentUnitCost, componentsUsed } = window.Calc;
+  const compLow = (c) => num(c.stock) <= (c.lowStock === '' || c.lowStock == null ? 0 : num(c.lowStock));
+  const fmtQty = (q, unit) => `${fmtNum(q, 2)} ${unit || 'ud.'}`;
   const defaultPrinter = () => findPrinter(S.settings.defaultPrinterId) || S.printers[0];
   const printerHourCost = (pr) => window.Calc.printerHourCost(S.settings, pr);
   const filamentLabel = (f) => `${f.name}${f.material ? ' · ' + f.material : ''}`;
@@ -99,6 +103,14 @@
   }
 
   /** Suma (sign=+1) o descuenta (sign=-1) del stock los gramos de un trabajo. */
+  /** Suma (sign=+1) o descuenta (sign=-1) del stock los componentes de un trabajo. */
+  function applyComponentStock(components, quantity, sign) {
+    const byId = componentsById();
+    Object.entries(componentsUsed(components, quantity)).forEach(([id, q]) => {
+      if (byId[id]) byId[id].stock = Math.round((num(byId[id].stock) + sign * q) * 100) / 100;
+    });
+  }
+
   function applyStock(items, sign) {
     const byId = filamentsById();
     Object.entries(gramsByFilament(items)).forEach(([id, g]) => {
@@ -165,6 +177,8 @@
     const stockGrams = S.filaments.reduce((s, f) => s + Math.max(0, num(f.remaining)), 0);
     const stockValue = S.filaments.reduce((s, f) => s + Math.max(0, num(f.remaining)) * costPerGram(f), 0);
     const low = S.filaments.filter(isLow);
+    const lowComps = S.components.filter(compLow);
+    const compValue = S.components.reduce((s, c) => s + Math.max(0, num(c.stock)) * componentUnitCost(c), 0);
 
     const months = lastMonths(today().slice(0, 7), 12);
     const series = monthlySeries(S, months);
@@ -210,7 +224,7 @@
         <div class="kpi"><div class="label">Resultado de caja</div><div class="value">${moneySigned(r.cashResult)}</div>
           <div class="sub">Ingresos − comisiones − gastos</div></div>
         <div class="kpi"><div class="label">Stock de filamento</div><div class="value">${fmtGrams(stockGrams)}</div>
-          <div class="sub">Valor ${money(stockValue)} · ${S.filaments.length} bobinas</div></div>
+          <div class="sub">Valor ${money(stockValue)} · ${S.filaments.length} bobinas${S.components.length ? ` · componentes ${money(compValue)}` : ''}</div></div>
       </div>
 
       <div class="card">
@@ -221,11 +235,14 @@
       <div class="grid grid-2">
         <div class="card">
           <h2>Stock bajo</h2>
-          ${low.length ? `<ul class="alert-list">${low.map((f) => `
+          ${low.length || lowComps.length ? `<ul class="alert-list">${low.map((f) => `
             <li><span><span class="swatch" style="background:${esc(f.color || '#999')}"></span>${esc(filamentLabel(f))}</span>
               <span class="nowrap"><span class="badge low">⚠ ${fmtGrams(f.remaining)}</span>
-              <button class="btn small" data-action="restock" data-id="${f.id}">Reponer</button></span></li>`).join('')}</ul>`
-            : `<p class="muted">✓ Todo el filamento está por encima del mínimo.</p>`}
+              <button class="btn small" data-action="restock" data-id="${f.id}">Reponer</button></span></li>`).join('')}${lowComps.map((c) => `
+            <li><span>🔩 ${esc(c.name)}</span>
+              <span class="nowrap"><span class="badge low">⚠ ${fmtQty(c.stock, c.unit)}</span>
+              <button class="btn small" data-action="restock-component" data-id="${c.id}">Reponer</button></span></li>`).join('')}</ul>`
+            : `<p class="muted">✓ Filamentos y componentes por encima del mínimo.</p>`}
         </div>
         <div class="card">
           <h2>Piezas más rentables · ${PERIODS[ui.period].toLowerCase()}</h2>
@@ -450,6 +467,123 @@
     });
   }
 
+  // ================================================================ COMPONENTES
+
+  const COMPONENT_CATEGORIES = ['Iluminación', 'Electrónica', 'Tornillería', 'Imanes', 'Cables', 'Llaveros y anillas', 'Embalaje', 'Otros'];
+
+  function viewComponents() {
+    const list = [...S.components].sort((a, b) => (a.category || '').localeCompare(b.category || '') || a.name.localeCompare(b.name));
+    const used = {};
+    S.prints.forEach((p) => Object.entries(componentsUsed(p.components, p.quantity)).forEach(([id, q]) => { used[id] = (used[id] || 0) + q; }));
+    const total = list.reduce((s, c) => s + Math.max(0, num(c.stock)) * componentUnitCost(c), 0);
+    return `
+      <div class="page-head">
+        <h1>Componentes</h1>
+        <div class="actions"><button class="btn primary" data-action="new-component">+ Nuevo componente</button></div>
+      </div>
+      <p class="small muted" style="margin-top:-8px">Piezas externas que montas en tus impresiones: portalámparas, tiras LED, imanes, tornillos… Al registrar una impresión indica cuántas lleva cada pieza y se sumarán al coste y se descontarán del stock.</p>
+      <div class="card">
+        ${list.length ? `<div class="table-wrap"><table>
+          <thead><tr><th>Componente</th><th>Proveedor</th><th class="num">Precio paquete</th><th class="num">Coste ud.</th><th class="num">Stock</th><th class="num">Usados</th><th class="num">Valor</th><th></th></tr></thead>
+          <tbody>${list.map((c) => `<tr>
+            <td><b>${esc(c.name)}</b><div class="small muted">${esc(c.category || '')}</div></td>
+            <td>${esc(c.supplier || '')}</td>
+            <td class="num">${money(c.price)}<div class="small muted">${fmtQty(c.packUnits || 1, c.unit)}</div></td>
+            <td class="num"><b>${money(componentUnitCost(c))}</b><div class="small muted">por ${esc(c.unit || 'ud.')}</div></td>
+            <td class="num">${fmtQty(c.stock, c.unit)}${compLow(c) ? '<div><span class="badge low">⚠ Stock bajo</span></div>' : ''}</td>
+            <td class="num">${fmtNum(used[c.id] || 0, 2)}</td>
+            <td class="num">${money(Math.max(0, num(c.stock)) * componentUnitCost(c))}</td>
+            <td class="actions">
+              <button class="btn small" data-action="restock-component" data-id="${c.id}">Reponer</button>
+              <button class="icon-btn" data-action="edit-component" data-id="${c.id}" aria-label="Editar" title="Editar / ajustar stock">✎</button>
+              <button class="icon-btn" data-action="delete-component" data-id="${c.id}" aria-label="Eliminar" title="Eliminar">🗑</button>
+            </td></tr>`).join('')}</tbody>
+          <tfoot><tr><td colspan="6">Total</td><td class="num">${money(total)}</td><td></td></tr></tfoot>
+        </table></div>` : `<div class="empty">Aún no tienes componentes. Añade, por ejemplo, un portalámparas o una tira LED.</div>`}
+      </div>`;
+  }
+
+  function componentForm(c) {
+    const isNew = !c;
+    c = c || { name: '', category: 'Iluminación', unit: 'ud.', price: '', packUnits: 1, stock: '', lowStock: 2, supplier: '' };
+    openModal({
+      title: isNew ? 'Nuevo componente' : 'Editar componente',
+      body: `<div class="form-grid">
+        ${field('Nombre *', inp('name', c.name, 'required placeholder="Ej. Portalámparas E14"'), { wide: true })}
+        ${field('Categoría', inp('category', c.category, 'list="comp-cats"') + `<datalist id="comp-cats">${COMPONENT_CATEGORIES.map((x) => `<option value="${x}">`).join('')}</datalist>`)}
+        ${field('Unidad', inp('unit', c.unit, 'list="comp-units"') + '<datalist id="comp-units"><option value="ud."><option value="m"><option value="cm"><option value="par"><option value="juego"></datalist>', { hint: 'Cómo lo cuentas: ud., m…' })}
+        ${field('Precio del paquete *', numInp('price', c.price, 'required min="0"'))}
+        ${field('Unidades por paquete *', numInp('packUnits', c.packUnits, 'required min="0.01"'), { hint: 'Ej. bolsa de 50 imanes → 50.' })}
+        ${isNew
+          ? field('Nº de paquetes comprados', numInp('packs', 1, 'min="0"'), { hint: 'Define el stock inicial.' })
+          : field('Stock actual', numInp('stock', c.stock), { hint: 'Ajusta tras contar.' })}
+        ${field('Aviso de stock bajo', numInp('lowStock', c.lowStock, 'min="0"'))}
+        ${field('Proveedor', inp('supplier', c.supplier, 'placeholder="AliExpress, Amazon…"'))}
+        ${isNew ? `${field('Fecha de compra', `<input type="date" name="date" value="${today()}">`)}
+          <div class="field wide"><label class="check"><input type="checkbox" name="asExpense" checked> Registrar la compra como gasto</label></div>` : ''}
+      </div>
+      <div class="price-box" id="comp-preview"></div>`,
+      onOpen: (b) => {
+        const refresh = () => {
+          const unitCost = componentUnitCost({ price: val(b, 'price'), packUnits: val(b, 'packUnits') });
+          $('#comp-preview', b).innerHTML = `<div><div class="small muted">Coste por ${esc(val(b, 'unit') || 'ud.')}</div><strong>${money(unitCost)}</strong></div>`;
+        };
+        b.addEventListener('input', refresh);
+        refresh();
+      },
+      onSubmit: (b) => {
+        const data = {
+          name: val(b, 'name'), category: val(b, 'category'), unit: val(b, 'unit') || 'ud.', price: num(val(b, 'price')),
+          packUnits: num(val(b, 'packUnits')), lowStock: val(b, 'lowStock'), supplier: val(b, 'supplier'),
+        };
+        if (data.packUnits <= 0) { toast('Las unidades por paquete deben ser mayores que 0.'); return false; }
+        if (isNew) {
+          const packs = num(val(b, 'packs'));
+          const nc = { id: uid(), ...data, stock: packs * data.packUnits };
+          S.components.push(nc);
+          if (checked(b, 'asExpense') && packs > 0) {
+            S.expenses.push({ id: uid(), date: val(b, 'date') || today(), category: 'componentes', description: `${packs} × ${nc.name}`, amount: packs * data.price, componentId: nc.id });
+          }
+          persist('Componente añadido');
+        } else {
+          Object.assign(c, data, { stock: num(val(b, 'stock')) });
+          S.prints.forEach((p) => (p.components || []).forEach((it) => { if (it.componentId === c.id) it.componentName = c.name; }));
+          persist('Componente actualizado');
+        }
+      },
+    });
+  }
+
+  function restockComponentForm(c) {
+    openModal({
+      title: `Reponer · ${c.name}`,
+      submitLabel: 'Añadir al stock',
+      body: `<div class="form-grid">
+        ${field('Nº de paquetes', numInp('packs', 1, 'min="0" step="1"'))}
+        ${field(`Cantidad a añadir (${esc(c.unit || 'ud.')})`, numInp('qty', c.packUnits || 1, 'required min="0"'))}
+        ${field('Importe pagado', numInp('amount', c.price, 'min="0"'))}
+        ${field('Fecha', `<input type="date" name="date" value="${today()}">`)}
+        <div class="field wide"><label class="check"><input type="checkbox" name="asExpense" checked> Registrar como gasto</label></div>
+      </div>
+      <p class="small muted">Stock actual: ${fmtQty(c.stock, c.unit)}</p>`,
+      onOpen: (b) => {
+        $('[name="packs"]', b).addEventListener('input', (e) => {
+          const n = num(e.target.value);
+          $('[name="qty"]', b).value = n * num(c.packUnits || 1);
+          $('[name="amount"]', b).value = Math.round(n * num(c.price) * 100) / 100;
+        });
+      },
+      onSubmit: (b) => {
+        const qty = num(val(b, 'qty')), amount = num(val(b, 'amount'));
+        c.stock = num(c.stock) + qty;
+        if (checked(b, 'asExpense') && amount > 0) {
+          S.expenses.push({ id: uid(), date: val(b, 'date') || today(), category: 'componentes', description: `Reposición ${fmtQty(qty, c.unit)} · ${c.name}`, amount, componentId: c.id });
+        }
+        persist(`+${fmtQty(qty, c.unit)} de ${c.name}`);
+      },
+    });
+  }
+
   // ================================================================ IMPRESORAS
 
   function viewPrinters() {
@@ -569,7 +703,7 @@
             const s = num(sold[p.id]);
             return `<tr>
               <td class="nowrap">${fmtDate(p.date)}</td>
-              <td><b>${esc(p.name)}</b><div class="small muted">${esc([p.printerName, (p.items || []).map((it) => it.filamentName).join(', ')].filter(Boolean).join(' · '))}</div></td>
+              <td><b>${esc(p.name)}</b><div class="small muted">${esc([p.printerName, (p.items || []).map((it) => it.filamentName).join(', '), (p.components || []).map((it) => `${fmtNum(it.qty, 2)}× ${it.componentName}`).join(', ')].filter(Boolean).join(' · '))}</div></td>
               <td class="num">${fmtNum(p.quantity)}</td>
               <td class="num">${fmtGrams(g)}</td>
               <td class="num">${fmtHours(p.hours)}</td>
@@ -604,7 +738,7 @@
       return filamentForm();
     }
     const dp = defaultPrinter();
-    p = p || { printerId: dp ? dp.id : '', name: '', date: today(), quantity: 1, hours: 2, items: [{ filamentId: S.filaments[0] ? S.filaments[0].id : '', grams: 50 }], laborHours: 0, extras: 0, margin: '', notes: '', stockDeducted: true };
+    p = p || { printerId: dp ? dp.id : '', components: [], name: '', date: today(), quantity: 1, hours: 2, items: [{ filamentId: S.filaments[0] ? S.filaments[0].id : '', grams: 50 }], laborHours: 0, extras: 0, margin: '', notes: '', stockDeducted: true };
     const h = Math.floor(num(p.hours)), m = Math.round((num(p.hours) - h) * 60);
     const printerMissing = !isNew && p.printerId && !findPrinter(p.printerId);
     const selPrinterId = findPrinter(p.printerId) ? p.printerId : (dp ? dp.id : '');
@@ -618,6 +752,13 @@
         <select name="item-filament" aria-label="Filamento">${filamentOptions(it.filamentId)}</select>
         <input name="item-grams" type="number" step="any" min="0" value="${esc(it.grams)}" aria-label="Gramos" placeholder="g">
         <button type="button" class="icon-btn" data-remove-item aria-label="Quitar">✕</button></div>`;
+
+    const componentOptions = (selected) => `<option value="">— Elige componente —</option>` + S.components
+      .map((c) => `<option value="${c.id}"${c.id === selected ? ' selected' : ''}>${esc(c.name)} · ${money(componentUnitCost(c))}/${esc(c.unit || 'ud.')} (${fmtNum(c.stock, 2)} disp.)</option>`).join('');
+    const compRow = (it) => `<div class="comp-row">
+        <select name="comp-id" aria-label="Componente">${componentOptions(it.componentId)}</select>
+        <input name="comp-qty" type="number" step="any" min="0" value="${esc(it.qty)}" aria-label="Cantidad por pieza" placeholder="por pieza">
+        <button type="button" class="icon-btn" data-remove-comp aria-label="Quitar">✕</button></div>`;
 
     openModal({
       title: quoteOnly ? 'Calculadora de coste' : isNew ? 'Registrar impresión' : 'Editar impresión',
@@ -633,13 +774,17 @@
         <h3 class="section-title">Filamento usado (gramos totales, según el laminador)</h3>
         <div class="items-list" id="items">${(p.items.length ? p.items : [{ filamentId: '', grams: '' }]).map(itemRow).join('')}</div>
         <button type="button" class="btn small" id="add-item" style="margin-top:8px">+ Añadir otro filamento</button>
+        <h3 class="section-title">Componentes externos (cantidad por pieza)</h3>
+        ${S.components.length ? `<div class="items-list" id="comps">${(p.components || []).map(compRow).join('')}</div>
+          <button type="button" class="btn small" id="add-comp" style="margin-top:8px">+ Añadir componente</button>`
+          : `<p class="small muted">¿Lleva portalámparas, LED, imanes…? Dalos de alta en <a href="#components" data-close-link>Componentes</a> para sumarlos al coste.</p>`}
         <h3 class="section-title">Otros costes</h3>
         <div class="form-grid">
           ${field('Mano de obra (h)', numInp('laborHours', p.laborHours, 'min="0"'), { hint: `Post-procesado a ${money(S.settings.laborRate)}/h` })}
-          ${field('Extras (€)', numInp('extras', p.extras, 'min="0"'), { hint: 'Tornillos, imanes, embalaje…' })}
+          ${field('Extras (€)', numInp('extras', p.extras, 'min="0"'), { hint: 'Gastos sueltos no inventariados.' })}
           ${field('Margen (%)', numInp('margin', p.margin, `placeholder="${S.settings.defaultMargin}"`), { hint: 'Para el precio sugerido.' })}
           ${field('Notas', inp('notes', p.notes))}
-          ${quoteOnly || isNew ? `<div class="field wide"><label class="check"><input type="checkbox" name="deduct" ${quoteOnly ? '' : 'checked'}> Descontar el filamento del stock</label></div>` : ''}
+          ${quoteOnly || isNew ? `<div class="field wide"><label class="check"><input type="checkbox" name="deduct" ${quoteOnly ? '' : 'checked'}> Descontar filamento y componentes del stock</label></div>` : ''}
         </div>
         <div class="card" style="margin:16px 0 0" id="preview"></div>`,
       onOpen: (b) => {
@@ -648,9 +793,15 @@
           const f = S.filaments.find((x) => x.id === id);
           return { filamentId: id, filamentName: f ? filamentLabel(f) : '', grams: num($('[name="item-grams"]', row).value) };
         }).filter((it) => it.filamentId && it.grams > 0);
+        const readComps = () => $$('.comp-row', b).map((row) => {
+          const id = $('[name="comp-id"]', row).value;
+          const c = S.components.find((x) => x.id === id);
+          return { componentId: id, componentName: c ? c.name : '', qty: num($('[name="comp-qty"]', row).value), unitCost: c ? componentUnitCost(c) : 0 };
+        }).filter((it) => it.componentId && it.qty > 0);
         const readJob = () => ({
           printerId: val(b, 'printerId'),
           items: readItems(),
+          components: readComps(),
           hours: num(val(b, 'h')) + num(val(b, 'm')) / 60,
           quantity: Math.max(1, Math.floor(num(val(b, 'quantity'))) || 1),
           laborHours: num(val(b, 'laborHours')),
@@ -660,7 +811,11 @@
         const refresh = () => {
           const job = readJob();
           const pr = findPrinter(job.printerId);
-          const c = printCost(job, filamentsById(), S.settings, pr);
+          const c = printCost(job, filamentsById(), S.settings, pr, componentsById());
+          const prevComps = !isNew && p.stockDeducted ? componentsUsed(p.components, p.quantity) : {};
+          const shortComps = Object.entries(componentsUsed(job.components, job.quantity))
+            .map(([id, q]) => ({ c: S.components.find((x) => x.id === id), q }))
+            .filter(({ c: k, q }) => k && q > num(k.stock) + num(prevComps[k.id]));
           // stock disponible teniendo en cuenta lo que este trabajo ya descontó
           const prev = !isNew && p.stockDeducted ? gramsByFilament(p.items) : {};
           const short = Object.entries(gramsByFilament(job.items))
@@ -671,6 +826,7 @@
               <dt>Material</dt><dd>${money(c.material)}</dd>
               <dt>Electricidad${pr ? ` (${fmtNum(pr.watts)} W)` : ''}</dt><dd>${money(c.electricity)}</dd>
               <dt>Amortización y mantenimiento${pr ? ` · ${esc(pr.name)}` : ''}</dt><dd>${money(c.machine)}</dd>
+              ${c.components ? `<dt>Componentes externos</dt><dd>${money(c.components)}</dd>` : ''}
               <dt>Mano de obra</dt><dd>${money(c.labor)}</dd>
               <dt>Extras</dt><dd>${money(c.extras)}</dd>
               <dt>Margen de fallos (${fmtNum(S.settings.failureRate)} %)</dt><dd>${money(c.failure)}</dd>
@@ -680,16 +836,27 @@
               <div><div class="small muted">Coste por unidad</div><strong>${money(c.unit)}</strong></div>
               <div><div class="small muted">Precio sugerido (+${fmtNum(c.margin)} %)</div><strong>${money(c.suggestedUnitPrice)}</strong></div>
             </div>
-            ${short.length ? `<p class="small neg">⚠ Stock insuficiente: ${short.map(({ f }) => esc(f.name) + ' (' + fmtGrams(f.remaining) + ')').join(', ')}</p>` : ''}`;
+            ${short.length ? `<p class="small neg">⚠ Stock insuficiente: ${short.map(({ f }) => esc(f.name) + ' (' + fmtGrams(f.remaining) + ')').join(', ')}</p>` : ''}
+            ${shortComps.length ? `<p class="small neg">⚠ Faltan componentes: ${shortComps.map(({ c: k, q }) => `${esc(k.name)} (necesitas ${fmtNum(q, 2)}, hay ${fmtNum(k.stock, 2)})`).join(', ')}</p>` : ''}`;
         };
         b.addEventListener('input', refresh);
         b.addEventListener('change', refresh);
         b.addEventListener('click', (e) => {
+          if (e.target.closest('[data-remove-comp]')) {
+            e.target.closest('.comp-row').remove();
+            refresh();
+          }
+          if (e.target.closest('[data-close-link]')) modal.close();
           if (e.target.closest('[data-remove-item]')) {
             const rows = $$('.item-row', b);
             if (rows.length > 1) e.target.closest('.item-row').remove();
             refresh();
           }
+        });
+        const addComp = $('#add-comp', b);
+        if (addComp) addComp.addEventListener('click', () => {
+          $('#comps', b).insertAdjacentHTML('beforeend', compRow({ componentId: '', qty: 1 }));
+          refresh();
         });
         $('#add-item', b).addEventListener('click', () => {
           $('#items', b).insertAdjacentHTML('beforeend', itemRow({ filamentId: '', grams: '' }));
@@ -702,15 +869,18 @@
         const job = b._readJob();
         if (!job.items.length && !job.hours) { toast('Indica el filamento usado o el tiempo de impresión.'); return false; }
         const pr = findPrinter(job.printerId);
-        const cost = printCost(job, filamentsById(), S.settings, pr);
+        const cost = printCost(job, filamentsById(), S.settings, pr, componentsById());
         const data = { ...job, printerName: pr ? pr.name : '', name: val(b, 'name'), date: val(b, 'date') || today(), notes: val(b, 'notes'), cost };
         if (isNew) {
           const deduct = checked(b, 'deduct');
-          if (deduct) applyStock(data.items, -1);
+          if (deduct) { applyStock(data.items, -1); applyComponentStock(data.components, data.quantity, -1); }
           S.prints.push({ id: uid(), ...data, stockDeducted: deduct });
           persist(deduct ? 'Impresión registrada y stock actualizado' : 'Impresión registrada');
         } else {
-          if (p.stockDeducted) { applyStock(p.items, +1); applyStock(data.items, -1); }
+          if (p.stockDeducted) {
+            applyStock(p.items, +1); applyStock(data.items, -1);
+            applyComponentStock(p.components, p.quantity, +1); applyComponentStock(data.components, data.quantity, -1);
+          }
           Object.assign(p, data);
           // actualizar el coste en las ventas ligadas que no se hayan modificado a mano
           S.sales.forEach((s) => { if (s.printId === p.id && s.costFromPrint) s.unitCost = cost.unit; });
@@ -831,6 +1001,7 @@
 
   const EXPENSE_CATEGORIES = {
     filamento: 'Filamento',
+    componentes: 'Componentes',
     electricidad: 'Electricidad',
     repuestos: 'Repuestos y mantenimiento',
     maquinaria: 'Impresoras y herramientas',
@@ -924,6 +1095,7 @@
           <button class="btn" data-action="export-csv" data-kind="sales">Ventas CSV</button>
           <button class="btn" data-action="export-csv" data-kind="expenses">Gastos CSV</button>
           <button class="btn" data-action="export-csv" data-kind="filaments">Filamentos CSV</button>
+          <button class="btn" data-action="export-csv" data-kind="components">Componentes CSV</button>
           <button class="btn" data-action="load-demo">Cargar datos de ejemplo</button>
           <button class="btn danger" data-action="reset">Borrar todo</button>
         </div>
@@ -977,6 +1149,9 @@
     if (kind === 'sales') {
       rows = [['Fecha', 'Descripción', 'Cliente', 'Canal', 'Unidades', 'Precio ud.', 'Ingreso', 'Comisiones', 'Coste', 'Beneficio']];
       S.sales.forEach((s) => { const t = saleTotals(s); rows.push([s.date, s.description, s.customer, s.channel, num(s.quantity), num(s.unitPrice), t.revenue, t.fees, t.cogs, t.profit]); });
+    } else if (kind === 'components') {
+      rows = [['Nombre', 'Categoría', 'Unidad', 'Precio paquete', 'Uds. por paquete', 'Coste ud.', 'Stock', 'Valor stock', 'Proveedor']];
+      S.components.forEach((c) => rows.push([c.name, c.category, c.unit, num(c.price), num(c.packUnits), componentUnitCost(c), num(c.stock), Math.max(0, num(c.stock)) * componentUnitCost(c), c.supplier]));
     } else if (kind === 'expenses') {
       rows = [['Fecha', 'Categoría', 'Descripción', 'Importe']];
       S.expenses.forEach((e) => rows.push([e.date, EXPENSE_CATEGORIES[e.category] || e.category, e.description, num(e.amount)]));
@@ -1027,9 +1202,15 @@
     const pr1 = { id: uid(), name: 'Bambu Lab P1S', notes: 'Cerrada · AMS', watts: 110, price: 699, lifeHours: 6000, maintenancePerHour: 0.08 };
     const pr2 = { id: uid(), name: 'Creality Ender 3 V3', notes: 'Boquilla 0.4', watts: 150, price: 229, lifeHours: 4000, maintenancePerHour: 0.05 };
     st.defaultPrinterId = pr1.id;
-    const state = { version: 1, demo: true, settings: st, printers: [pr1, pr2], filaments: [f1, f2, f3, f4], prints: [], sales: [], expenses: [] };
+    const c1 = { id: uid(), name: 'Tira LED USB blanco cálido', category: 'Iluminación', unit: 'ud.', price: 5.99, packUnits: 1, stock: 0, lowStock: 2, supplier: 'Amazon' };
+    const c2 = { id: uid(), name: 'Imanes neodimio 6×2 mm', category: 'Imanes', unit: 'ud.', price: 6.5, packUnits: 50, stock: 0, lowStock: 10, supplier: 'AliExpress' };
+    const c3 = { id: uid(), name: 'Anillas de llavero 25 mm', category: 'Llaveros y anillas', unit: 'ud.', price: 4.2, packUnits: 100, stock: 0, lowStock: 20, supplier: 'AliExpress' };
+    const c4 = { id: uid(), name: 'Portalámparas E14 con cable', category: 'Iluminación', unit: 'ud.', price: 17.9, packUnits: 5, stock: 0, lowStock: 2, supplier: 'Leroy Merlin' };
+    const state = { version: 1, demo: true, settings: st, printers: [pr1, pr2], components: [c1, c2, c3, c4], filaments: [f1, f2, f3, f4], prints: [], sales: [], expenses: [] };
     state.expenses.push({ id: uid(), date: d(0, 1), category: 'maquinaria', description: 'Impresora Creality Ender 3 V3', amount: 229, printerId: pr2.id });
     const buy = (f, n, date) => { f.remaining += n * f.spoolWeight; state.expenses.push({ id: uid(), date, category: 'filamento', description: `${n} × ${filamentLabel(f)}`, amount: n * f.price, filamentId: f.id }); };
+    const buyC = (c, packs, date) => { c.stock += packs * c.packUnits; state.expenses.push({ id: uid(), date, category: 'componentes', description: `${packs} × ${c.name}`, amount: packs * c.price, componentId: c.id }); };
+    buyC(c1, 3, d(2, 20)); buyC(c2, 1, d(0, 4)); buyC(c3, 1, d(3, 28)); buyC(c4, 1, d(4, 2));
     buy(f1, 3, d(0, 3)); buy(f2, 1, d(0, 3)); buy(f3, 1, d(1, 12)); buy(f4, 1, d(2, 5)); buy(f1, 2, d(4, 8));
     state.expenses.push({ id: uid(), date: d(0, 10), category: 'repuestos', description: 'Boquillas 0.4 mm y cama PEI', amount: 34.9 });
     state.expenses.push({ id: uid(), date: d(3, 2), category: 'embalaje', description: 'Cajas y bolsas de envío', amount: 22 });
@@ -1037,31 +1218,34 @@
     const byId = () => Object.fromEntries(state.filaments.map((f) => [f.id, f]));
     const print = (name, date, qty, hours, items, extra = {}) => {
       const pr = extra.printer || pr1;
-      const job = { printerId: pr.id, printerName: pr.name, items: items.map(([f, g]) => ({ filamentId: f.id, filamentName: filamentLabel(f), grams: g })), hours, quantity: qty, laborHours: extra.labor || 0, extras: extra.extras || 0, margin: '' };
-      const p = { id: uid(), name, date, notes: '', ...job, cost: printCost(job, byId(), st, pr), stockDeducted: true };
+      const comps = (extra.components || []).map(([c, q]) => ({ componentId: c.id, componentName: c.name, qty: q, unitCost: componentUnitCost(c) }));
+      const job = { printerId: pr.id, printerName: pr.name, components: comps, items: items.map(([f, g]) => ({ filamentId: f.id, filamentName: filamentLabel(f), grams: g })), hours, quantity: qty, laborHours: extra.labor || 0, extras: extra.extras || 0, margin: '' };
+      const p = { id: uid(), name, date, notes: '', ...job, cost: printCost(job, byId(), st, pr, Object.fromEntries(state.components.map((c) => [c.id, c]))), stockDeducted: true };
       job.items.forEach((it) => { byId()[it.filamentId].remaining -= it.grams; });
+      comps.forEach((it) => { state.components.find((c) => c.id === it.componentId).stock -= it.qty * qty; });
       state.prints.push(p);
       return p;
     };
     const sell = (p, date, qty, price, fees, customer, channel) => state.sales.push({ id: uid(), date, printId: p.id, description: p.name, quantity: qty, unitPrice: price, fees, unitCost: p.cost.unit, customer, channel, costFromPrint: true });
     const p1 = print('Soporte de auriculares', d(0, 6), 4, 14, [[f1, 520]], { labor: 0.5, printer: pr2 });
     const p2 = print('Maceta geométrica', d(1, 2), 3, 9.5, [[f3, 390]], { extras: 1.5 });
-    const p3 = print('Organizador de escritorio', d(1, 20), 2, 11, [[f1, 610], [f2, 120]], { labor: 1 });
+    const p3 = print('Organizador de escritorio', d(1, 20), 2, 11, [[f1, 610], [f2, 120]], { labor: 1, components: [[c2, 4]] });
     const p4 = print('Fundas flexibles', d(2, 9), 10, 6, [[f4, 330]], { extras: 2, printer: pr2 });
-    const p5 = print('Lámpara lunar', d(3, 15), 2, 18, [[f2, 480]], { extras: 12, labor: 1, printer: pr2 });
-    const p6 = print('Llaveros personalizados', d(4, 11), 25, 5, [[f1, 150], [f3, 90]], { labor: 1.5 });
+    const p5 = print('Lámpara lunar', d(3, 15), 2, 18, [[f2, 480]], { labor: 1, printer: pr2, components: [[c1, 1]] });
+    const p6 = print('Llaveros personalizados', d(4, 11), 25, 5, [[f1, 150], [f3, 90]], { labor: 1.5, components: [[c3, 1]] });
     const p7 = print('Maceta geométrica', d(5, 4), 4, 12.5, [[f3, 450]], { extras: 2 });
+    const p8 = print('Lámpara de mesa Voronoi', d(4, 20), 2, 22, [[f1, 380]], { labor: 1.5, components: [[c4, 1]] });
     sell(p1, d(0, 14), 2, 14.9, 2.4, 'Laura', 'Etsy'); sell(p1, d(1, 3), 2, 14.9, 1.2, '', 'Wallapop');
     sell(p2, d(1, 18), 3, 16, 3.1, 'Floristería Nube', 'Directo');
     sell(p3, d(2, 1), 1, 24, 3.8, 'Marc', 'Etsy'); sell(p4, d(2, 20), 6, 7.5, 2, '', 'Feria');
-    sell(p5, d(3, 22), 2, 45, 7.6, 'Ana', 'Etsy'); sell(p4, d(4, 2), 3, 7.5, 0, '', 'Directo');
+    sell(p5, d(3, 22), 2, 45, 7.6, 'Ana', 'Etsy'); sell(p8, d(4, 27), 1, 49, 6.1, 'Jordi', 'Etsy'); sell(p4, d(4, 2), 3, 7.5, 0, '', 'Directo');
     sell(p6, d(4, 18), 20, 3.5, 4.2, 'Club Ciclista', 'Directo'); sell(p7, d(5, Math.min(Number(t.slice(8, 10)), 10)), 2, 16, 2.2, '', 'Wallapop');
     return state;
   }
 
   // ================================================================ ENRUTADO Y EVENTOS
 
-  const VIEWS = { dashboard: viewDashboard, filaments: viewFilaments, printers: viewPrinters, prints: viewPrints, sales: viewSales, expenses: viewExpenses, settings: viewSettings };
+  const VIEWS = { dashboard: viewDashboard, filaments: viewFilaments, components: viewComponents, printers: viewPrinters, prints: viewPrints, sales: viewSales, expenses: viewExpenses, settings: viewSettings };
   const currentView = () => { const v = location.hash.slice(1); return VIEWS[v] ? v : 'dashboard'; };
 
   function render() {
@@ -1103,6 +1287,16 @@
 
   const actions = {
     'new-filament': () => filamentForm(),
+    'new-component': () => componentForm(),
+    'edit-component': (id) => componentForm(find(S.components, id)),
+    'restock-component': (id) => restockComponentForm(find(S.components, id)),
+    'delete-component': (id) => {
+      const c = find(S.components, id);
+      askConfirm(`¿Eliminar "${c.name}"? Las impresiones que lo usan conservan su coste.`, () => {
+        S.components = S.components.filter((x) => x.id !== id);
+        persist('Componente eliminado');
+      });
+    },
     'edit-filament': (id) => filamentForm(find(S.filaments, id)),
     'restock': (id) => restockForm(find(S.filaments, id)),
     'delete-filament': (id) => {
@@ -1130,9 +1324,9 @@
     'delete-print': (id) => {
       const p = find(S.prints, id);
       const linked = S.sales.filter((s) => s.printId === id).length;
-      const msg = `¿Eliminar la impresión "${p.name}"?` + (p.stockDeducted ? '\nEl filamento usado se devolverá al stock.' : '') + (linked ? `\nTiene ${linked} venta(s) asociada(s): se conservarán como ventas libres.` : '');
+      const msg = `¿Eliminar la impresión "${p.name}"?` + (p.stockDeducted ? '\nEl filamento y los componentes usados se devolverán al stock.' : '') + (linked ? `\nTiene ${linked} venta(s) asociada(s): se conservarán como ventas libres.` : '');
       askConfirm(msg, () => {
-        if (p.stockDeducted) applyStock(p.items, +1);
+        if (p.stockDeducted) { applyStock(p.items, +1); applyComponentStock(p.components, p.quantity, +1); }
         S.sales.forEach((s) => { if (s.printId === id) { s.printId = null; s.costFromPrint = false; } });
         S.prints = S.prints.filter((x) => x.id !== id);
         persist('Impresión eliminada');
@@ -1159,7 +1353,7 @@
     'import-json': () => $('#import-file').click(),
     'export-csv': (id, el) => exportCSV(el.dataset.kind),
     'load-demo': () => {
-      const hasData = S.printers.length || S.filaments.length || S.prints.length || S.sales.length || S.expenses.length;
+      const hasData = S.printers.length || S.components.length || S.filaments.length || S.prints.length || S.sales.length || S.expenses.length;
       const load = () => { S = demoData(); persist('Datos de ejemplo cargados'); };
       if (hasData && !S.demo) askConfirm('Los datos de ejemplo reemplazarán tus datos actuales. ¿Continuar?', load, 'Cargar ejemplo');
       else load();

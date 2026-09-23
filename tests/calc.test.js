@@ -96,3 +96,17 @@ test('estadísticas por impresora', () => {
   assert.deepEqual(st.A, { hours: 8, jobs: 2, units: 3, cost: 10, revenue: 20, profit: 12 });
   assert.deepEqual(st.B, { hours: 1, jobs: 1, units: 1, cost: 1, revenue: 0, profit: 0 });
 });
+
+test('componentes externos por pieza entran en el coste', () => {
+  const comps = { led: { id: 'led', price: 6, packUnits: 1 }, iman: { id: 'iman', price: 5, packUnits: 50 } };
+  close(Calc.componentUnitCost(comps.iman), 0.1);
+  const job = { items: [], hours: 0, quantity: 3, components: [{ componentId: 'led', qty: 1 }, { componentId: 'iman', qty: 4 }] };
+  const c = Calc.printCost(job, fil, settings, null, comps);
+  close(c.components, 3 * 6 + 3 * 4 * 0.1);
+  close(c.failure, 0); // sin margen de fallos sobre componentes
+  close(c.unit, 6 + 0.4);
+  // componente eliminado: usa el coste guardado
+  const gone = Calc.printCost({ ...job, components: [{ componentId: 'x', qty: 2, unitCost: 1.5 }] }, fil, settings, null, comps);
+  close(gone.components, 3 * 2 * 1.5);
+  assert.deepEqual(Calc.componentsUsed(job.components, 3), { led: 3, iman: 12 });
+});

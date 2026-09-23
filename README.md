@@ -3,8 +3,9 @@
 Aplicación web para gestionar un pequeño negocio de impresión 3D:
 
 - **Filamentos** — stock de cada bobina (material, color, marca, precio, gramos restantes), aviso de stock bajo, reposiciones y valor del inventario.
+- **Componentes** — piezas externas (portalámparas, tiras LED, imanes, anillas…) con precio por paquete, coste por unidad, stock, aviso de stock bajo y reposiciones.
 - **Impresoras** — varias impresoras, cada una con su consumo, precio, vida útil y mantenimiento. Muestra su coste por hora, horas de uso, trabajos, ingresos y beneficio generado.
-- **Impresiones** — eliges la impresora y calcula el coste real de cada pieza (material, electricidad, amortización y mantenimiento de esa impresora, mano de obra, extras y margen por fallos), sugiere un precio de venta y descuenta automáticamente el filamento usado.
+- **Impresiones** — eliges la impresora y calcula el coste real de cada pieza (material, electricidad, amortización y mantenimiento de esa impresora, componentes externos que lleve cada pieza, mano de obra, extras y margen por fallos), sugiere un precio de venta y descuenta automáticamente el filamento usado.
 - **Ventas** — registra cada venta ligada a una impresión (o libre), con comisiones y envío, y calcula beneficio y margen.
 - **Gastos** — compras de filamento (se añaden solas al comprar/reponer), repuestos, embalaje, etc.
 - **Resumen** — ingresos, beneficio de las ventas, gastos pagados, resultado de caja, gráfico mensual de ingresos vs. gastos, piezas más rentables y piezas fabricadas pendientes de vender.
@@ -32,8 +33,9 @@ Si ya usabas la versión anterior, la impresora que tenías en Ajustes se convie
 | Material | gramos × (precio bobina ÷ peso bobina) |
 | Electricidad | horas × (W de la impresora ÷ 1000) × precio kWh |
 | Máquina | horas × (precio de la impresora ÷ vida útil + mantenimiento/h) |
+| Componentes | cantidad por pieza × piezas × (precio paquete ÷ uds. por paquete) |
 | Mano de obra | horas de trabajo × tarifa/h |
-| Fallos | % sobre material + electricidad + máquina |
+| Fallos | % sobre material + electricidad + máquina (no sobre componentes) |
 | Precio sugerido | coste por unidad × (1 + margen %) |
 
 En el resumen:

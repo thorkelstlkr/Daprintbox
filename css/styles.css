@@ -171,7 +171,7 @@ tfoot td { font-weight: 700; border-top: 1px solid var(--axis); }
 .price-box strong { font-size: 1.25rem; }
 
 .items-list { display: flex; flex-direction: column; gap: 8px; }
-.item-row { display: grid; grid-template-columns: 1fr 110px auto; gap: 8px; align-items: center; }
+.item-row, .comp-row { display: grid; grid-template-columns: 1fr 110px auto; gap: 8px; align-items: center; }
 
 /* ---------- Gráfico ---------- */
 .chart { position: relative; }
@@ -228,7 +228,7 @@ dialog::backdrop { background: rgba(0, 0, 0, .45); }
 
 @media (max-width: 640px) {
   .topbar { flex-direction: column; align-items: stretch; gap: 6px; padding-bottom: 6px; }
-  .item-row { grid-template-columns: 1fr 90px auto; }
+  .item-row, .comp-row { grid-template-columns: 1fr 90px auto; }
   .kpi .value { font-size: 1.25rem; }
 }
 

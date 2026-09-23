@@ -19,6 +19,26 @@
     return num(filament.price) / weight;
   }
 
+  /** Coste de una unidad de componente (precio del paquete / unidades por paquete). */
+  function componentUnitCost(component) {
+    const units = num(component && component.packUnits) || 1;
+    return num(component && component.price) / units;
+  }
+
+  /**
+   * Unidades de cada componente que consume un trabajo.
+   * components: [{ componentId, qty }] con qty por pieza; se multiplica por las piezas producidas.
+   */
+  function componentsUsed(components, quantity) {
+    const out = {};
+    const q = Math.max(1, Math.floor(num(quantity)) || 1);
+    (components || []).forEach((c) => {
+      if (!c.componentId) return;
+      out[c.componentId] = (out[c.componentId] || 0) + num(c.qty) * q;
+    });
+    return out;
+  }
+
   /**
    * Parámetros de la impresora usada: los de `printer` si se indica
    * ({ watts, price, lifeHours, maintenancePerHour }) o, si no, los de ajustes.
@@ -48,8 +68,11 @@
    * job.items: [{ filamentId, grams }] — gramos totales del trabajo (todas las unidades).
    * job.hours: horas totales de impresión. job.quantity: piezas producidas.
    * printer: impresora usada (opcional; sin ella se usan los valores de ajustes).
+   * job.components: [{ componentId, qty, unitCost }] — piezas externas por unidad producida
+   * (portalámparas, LED, imanes…). Se valoran al precio actual del componente o, si ya no
+   * existe, al unitCost guardado. No se les aplica el margen de fallos.
    */
-  function printCost(job, filamentsById, settings, printer) {
+  function printCost(job, filamentsById, settings, printer, componentsById) {
     const material = (job.items || []).reduce((sum, it) => {
       const f = filamentsById[it.filamentId];
       return sum + (f ? num(it.grams) * costPerGram(f) : 0);
@@ -59,13 +82,17 @@
     const machine = hours * machineHourCost(settings, printer);
     const labor = num(job.laborHours) * num(settings.laborRate);
     const extras = num(job.extras);
-    const failure = (material + electricity + machine) * (num(settings.failureRate) / 100);
-    const total = material + electricity + machine + labor + extras + failure;
     const quantity = Math.max(1, Math.floor(num(job.quantity)) || 1);
+    const components = (job.components || []).reduce((sum, it) => {
+      const c = componentsById && componentsById[it.componentId];
+      return sum + num(it.qty) * quantity * (c ? componentUnitCost(c) : num(it.unitCost));
+    }, 0);
+    const failure = (material + electricity + machine) * (num(settings.failureRate) / 100);
+    const total = material + electricity + machine + components + labor + extras + failure;
     const unit = total / quantity;
     const margin = job.margin === undefined || job.margin === '' ? num(settings.defaultMargin) : num(job.margin);
     return {
-      material, electricity, machine, labor, extras, failure, total,
+      material, electricity, machine, components, labor, extras, failure, total,
       quantity, unit,
       suggestedUnitPrice: unit * (1 + margin / 100),
       margin,
@@ -185,7 +212,7 @@
   }
 
   const Calc = {
-    num, round2, costPerGram, printerParams, machineHourCost, printerHourCost, printCost, gramsByFilament,
+    num, round2, costPerGram, componentUnitCost, componentsUsed, printerParams, machineHourCost, printerHourCost, printCost, gramsByFilament,
     soldByPrint, printerStats, saleTotals, summary, lastMonths, monthlySeries,
   };
 
