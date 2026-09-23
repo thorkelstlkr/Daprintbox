@@ -61,6 +61,7 @@
     }
     return {
       version: 1,
+      demo: !!data.demo,
       settings,
       printers,
       filaments: Array.isArray(data.filaments) ? data.filaments : [],

@@ -140,6 +140,16 @@
   });
   $$('[data-close]', modal).forEach((b) => b.addEventListener('click', () => modal.close()));
 
+  /** Confirmación dentro de la página (no depende de window.confirm, que algunos visores bloquean). */
+  function askConfirm(message, onYes, yesLabel = 'Eliminar') {
+    openModal({
+      title: 'Confirmar',
+      submitLabel: yesLabel,
+      body: message.split('\n').map((line) => `<p>${esc(line)}</p>`).join(''),
+      onSubmit: () => { onYes(); },
+    });
+  }
+
   const field = (label, input, opts = {}) =>
     `<div class="field${opts.wide ? ' wide' : ''}"><label>${label}</label>${input}${opts.hint ? `<span class="hint">${opts.hint}</span>` : ''}</div>`;
   const inp = (name, value, attrs = '') => `<input name="${name}" value="${esc(value)}" ${attrs}>`;
@@ -906,8 +916,9 @@
 
       <div class="card">
         <h2>Datos</h2>
-        <p class="small muted">Los datos se guardan en este navegador. Exporta una copia de seguridad a menudo para no perderlos o para pasarlos a otro dispositivo.</p>
+        <p class="small muted">Los datos se guardan en este navegador. Guarda una copia de seguridad a menudo para no perderlos o para pasarlos a otro dispositivo. Si los botones de descarga no hacen nada (algunos visores web los bloquean), usa «Copia en texto».</p>
         <div class="filters">
+          <button class="btn" data-action="backup-text">Copia en texto (copiar / pegar)</button>
           <button class="btn" data-action="export-json">⬇ Exportar copia (JSON)</button>
           <button class="btn" data-action="import-json">⬆ Importar copia</button>
           <button class="btn" data-action="export-csv" data-kind="sales">Ventas CSV</button>
@@ -929,7 +940,20 @@
     else delete document.documentElement.dataset.theme;
   }
 
+  // Visor de claude.ai: las descargas pasan por su capacidad `downloads` (null fuera de él).
+  let viewerDownloads = null;
+  if (window.claude && typeof window.claude.use === 'function') {
+    window.claude.use('downloads').then((d) => { viewerDownloads = d; }, () => {});
+  }
+
   function download(name, content, type) {
+    if (viewerDownloads) {
+      viewerDownloads.save({ filename: name, data: content }).then(
+        () => toast('Archivo guardado'),
+        (err) => { if (err && err.code !== 'declined') toast('No se pudo descargar aquí; usa «Copia en texto».'); },
+      );
+      return;
+    }
     const blob = new Blob([content], { type });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
@@ -963,6 +987,32 @@
     download(`daprintbox-${kind}-${today()}.csv`, toCSV(rows), 'text/csv;charset=utf-8');
   }
 
+  /** Copia de seguridad como texto: sirve donde las descargas están bloqueadas. */
+  function backupTextForm() {
+    openModal({
+      title: 'Copia de seguridad en texto',
+      submitLabel: 'Reemplazar mis datos con este texto',
+      body: `<p class="small muted">Copia este texto y guárdalo en una nota o un archivo. Para restaurar, pega aquí una copia y pulsa el botón de abajo.</p>
+        <textarea id="backup-text" name="backup" rows="12" spellcheck="false" style="font-family:ui-monospace,monospace;font-size:.8rem">${esc(JSON.stringify(S))}</textarea>
+        <div class="filters" style="margin-top:8px"><button type="button" class="btn small" id="copy-backup">Copiar al portapapeles</button></div>`,
+      onOpen: (b) => {
+        const ta = $('#backup-text', b);
+        $('#copy-backup', b).addEventListener('click', () => {
+          const done = () => toast('Copia copiada al portapapeles');
+          const fallback = () => { ta.focus(); ta.select(); toast('Texto seleccionado: cópialo con Ctrl+C / Cmd+C'); };
+          try { navigator.clipboard.writeText(ta.value).then(done, fallback); } catch (e) { fallback(); }
+        });
+      },
+      onSubmit: (b) => {
+        let data;
+        try { data = JSON.parse(val(b, 'backup')); } catch (e) { data = null; }
+        if (!data || !Array.isArray(data.filaments)) { toast('El texto no es una copia válida de Daprintbox.'); return false; }
+        S = window.Store.normalize(data);
+        persist('Copia restaurada');
+      },
+    });
+  }
+
   // ================================================================ DATOS DE EJEMPLO
 
   function demoData() {
@@ -977,7 +1027,7 @@
     const pr1 = { id: uid(), name: 'Bambu Lab P1S', notes: 'Cerrada · AMS', watts: 110, price: 699, lifeHours: 6000, maintenancePerHour: 0.08 };
     const pr2 = { id: uid(), name: 'Creality Ender 3 V3', notes: 'Boquilla 0.4', watts: 150, price: 229, lifeHours: 4000, maintenancePerHour: 0.05 };
     st.defaultPrinterId = pr1.id;
-    const state = { version: 1, settings: st, printers: [pr1, pr2], filaments: [f1, f2, f3, f4], prints: [], sales: [], expenses: [] };
+    const state = { version: 1, demo: true, settings: st, printers: [pr1, pr2], filaments: [f1, f2, f3, f4], prints: [], sales: [], expenses: [] };
     state.expenses.push({ id: uid(), date: d(0, 1), category: 'maquinaria', description: 'Impresora Creality Ender 3 V3', amount: 229, printerId: pr2.id });
     const buy = (f, n, date) => { f.remaining += n * f.spoolWeight; state.expenses.push({ id: uid(), date, category: 'filamento', description: `${n} × ${filamentLabel(f)}`, amount: n * f.price, filamentId: f.id }); };
     buy(f1, 3, d(0, 3)); buy(f2, 1, d(0, 3)); buy(f3, 1, d(1, 12)); buy(f4, 1, d(2, 5)); buy(f1, 2, d(4, 8));
@@ -1017,7 +1067,8 @@
   function render() {
     const v = currentView();
     $$('.tabs button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.view === v)));
-    view.innerHTML = VIEWS[v]();
+    view.innerHTML = (S.demo ? `<div class="demo-banner" role="note"><span><b>Datos de ejemplo.</b> Explora la app con libertad; cuando quieras, empieza con los tuyos.</span>
+      <button class="btn small" data-action="start-fresh">Empezar con mis datos</button></div>` : '') + VIEWS[v]();
     wireChart();
     if (v === 'settings') wireSettings();
   }
@@ -1039,10 +1090,12 @@
       file.text().then((txt) => {
         const data = JSON.parse(txt);
         if (!data || !Array.isArray(data.filaments)) throw new Error('formato');
-        if (!confirm('Esto reemplazará todos los datos actuales por los de la copia. ¿Continuar?')) return;
-        S = window.Store.normalize(data);
-        persist('Copia importada');
+        askConfirm('Esto reemplazará todos los datos actuales por los de la copia. ¿Continuar?', () => {
+          S = window.Store.normalize(data);
+          persist('Copia importada');
+        }, 'Importar');
       }).catch(() => toast('El archivo no es una copia válida de Daprintbox.'));
+      e.target.value = '';
     });
   }
 
@@ -1054,9 +1107,10 @@
     'restock': (id) => restockForm(find(S.filaments, id)),
     'delete-filament': (id) => {
       const f = find(S.filaments, id);
-      if (!confirm(`¿Eliminar "${f.name}"? Las impresiones y gastos registrados se conservan.`)) return;
-      S.filaments = S.filaments.filter((x) => x.id !== id);
-      persist('Filamento eliminado');
+      askConfirm(`¿Eliminar "${f.name}"? Las impresiones y gastos registrados se conservan.`, () => {
+        S.filaments = S.filaments.filter((x) => x.id !== id);
+        persist('Filamento eliminado');
+      });
     },
     'new-printer': () => printerForm(),
     'edit-printer': (id) => printerForm(findPrinter(id)),
@@ -1064,10 +1118,11 @@
     'delete-printer': (id) => {
       const pr = findPrinter(id);
       const jobs = S.prints.filter((p) => p.printerId === id).length;
-      if (!confirm(`¿Eliminar "${pr.name}"?` + (jobs ? `\nSus ${jobs} impresión(es) conservan el coste ya calculado.` : ''))) return;
-      S.printers = S.printers.filter((x) => x.id !== id);
-      if (S.settings.defaultPrinterId === id) S.settings.defaultPrinterId = S.printers[0] ? S.printers[0].id : '';
-      persist('Impresora eliminada');
+      askConfirm(`¿Eliminar "${pr.name}"?` + (jobs ? `\nSus ${jobs} impresión(es) conservan el coste ya calculado.` : ''), () => {
+        S.printers = S.printers.filter((x) => x.id !== id);
+        if (S.settings.defaultPrinterId === id) S.settings.defaultPrinterId = S.printers[0] ? S.printers[0].id : '';
+        persist('Impresora eliminada');
+      });
     },
     'new-print': () => printForm(),
     'quote': () => printForm(null, { quoteOnly: true }),
@@ -1076,41 +1131,53 @@
       const p = find(S.prints, id);
       const linked = S.sales.filter((s) => s.printId === id).length;
       const msg = `¿Eliminar la impresión "${p.name}"?` + (p.stockDeducted ? '\nEl filamento usado se devolverá al stock.' : '') + (linked ? `\nTiene ${linked} venta(s) asociada(s): se conservarán como ventas libres.` : '');
-      if (!confirm(msg)) return;
-      if (p.stockDeducted) applyStock(p.items, +1);
-      S.sales.forEach((s) => { if (s.printId === id) { s.printId = null; s.costFromPrint = false; } });
-      S.prints = S.prints.filter((x) => x.id !== id);
-      persist('Impresión eliminada');
+      askConfirm(msg, () => {
+        if (p.stockDeducted) applyStock(p.items, +1);
+        S.sales.forEach((s) => { if (s.printId === id) { s.printId = null; s.costFromPrint = false; } });
+        S.prints = S.prints.filter((x) => x.id !== id);
+        persist('Impresión eliminada');
+      });
     },
     'sell-print': (id) => saleForm(null, id),
     'new-sale': () => saleForm(),
     'edit-sale': (id) => saleForm(find(S.sales, id)),
     'delete-sale': (id) => {
-      if (!confirm('¿Eliminar esta venta?')) return;
-      S.sales = S.sales.filter((x) => x.id !== id);
-      persist('Venta eliminada');
+      askConfirm('¿Eliminar esta venta?', () => {
+        S.sales = S.sales.filter((x) => x.id !== id);
+        persist('Venta eliminada');
+      });
     },
     'new-expense': () => expenseForm(),
     'edit-expense': (id) => expenseForm(find(S.expenses, id)),
     'delete-expense': (id) => {
-      if (!confirm('¿Eliminar este gasto?')) return;
-      S.expenses = S.expenses.filter((x) => x.id !== id);
-      persist('Gasto eliminado');
+      askConfirm('¿Eliminar este gasto?', () => {
+        S.expenses = S.expenses.filter((x) => x.id !== id);
+        persist('Gasto eliminado');
+      });
     },
     'export-json': () => download(`daprintbox-copia-${today()}.json`, JSON.stringify(S, null, 2), 'application/json'),
     'import-json': () => $('#import-file').click(),
     'export-csv': (id, el) => exportCSV(el.dataset.kind),
     'load-demo': () => {
       const hasData = S.printers.length || S.filaments.length || S.prints.length || S.sales.length || S.expenses.length;
-      if (hasData && !confirm('Los datos de ejemplo reemplazarán tus datos actuales. ¿Continuar?')) return;
-      S = demoData();
-      persist('Datos de ejemplo cargados');
+      const load = () => { S = demoData(); persist('Datos de ejemplo cargados'); };
+      if (hasData && !S.demo) askConfirm('Los datos de ejemplo reemplazarán tus datos actuales. ¿Continuar?', load, 'Cargar ejemplo');
+      else load();
     },
     'reset': () => {
-      if (!confirm('¿Borrar TODOS los datos? Esta acción no se puede deshacer (exporta una copia antes).')) return;
-      S = window.Store.emptyState();
-      persist('Datos borrados');
+      askConfirm('¿Borrar TODOS los datos? Esta acción no se puede deshacer (guarda una copia antes).', () => {
+        S = window.Store.emptyState();
+        persist('Datos borrados');
+      }, 'Borrar todo');
     },
+    'start-fresh': () => {
+      askConfirm('Se borrarán los datos de ejemplo para que empieces con los tuyos.', () => {
+        S = window.Store.emptyState();
+        location.hash = 'dashboard';
+        persist('Listo: empieza añadiendo tu impresora y tus filamentos');
+      }, 'Empezar desde cero');
+    },
+    'backup-text': () => backupTextForm(),
   };
 
   view.addEventListener('click', (e) => {
@@ -1135,6 +1202,12 @@
 
   $$('.tabs button').forEach((b) => b.addEventListener('click', () => { location.hash = b.dataset.view; }));
   window.addEventListener('hashchange', () => { render(); window.scrollTo(0, 0); });
+
+  // Primera visita: se abre con datos de ejemplo para ver la app funcionando.
+  if (!safeGet('daprintbox:v1')) {
+    S = demoData();
+    window.Store.save(S);
+  }
 
   applyTheme();
   render();
