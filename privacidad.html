@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Política de privacidad · Libreta Maker</title>
+  <meta name="description" content="Qué datos trata Libreta Maker, para qué y cuáles son tus derechos.">
+  <meta name="theme-color" content="#74af27">
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+  <style>
+    :root {
+      color-scheme: light;
+      --page: #f5f8ef; --surface: #ffffff; --ink: #11160b; --ink-2: #4a5540; --muted: #7f8a73;
+      --line: #e1e9d3; --accent: #74af27; --accent-strong: #4a7a12; --mark: #fff3b0;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        color-scheme: dark;
+        --page: #0d1109; --surface: #161c10; --ink: #f1f5ea; --ink-2: #c2ccb3; --muted: #8a957d;
+        --line: #263020; --accent: #86c236; --accent-strong: #9fd35a; --mark: #5a4d00;
+      }
+    }
+    :root[data-theme="dark"] {
+      color-scheme: dark;
+      --page: #0d1109; --surface: #161c10; --ink: #f1f5ea; --ink-2: #c2ccb3; --muted: #8a957d;
+      --line: #263020; --accent: #86c236; --accent-strong: #9fd35a; --mark: #5a4d00;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--page); color: var(--ink); font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; }
+    .masthead { background: #fff; border-bottom: 1px solid var(--line); padding: 6px 16px; display: flex; justify-content: center; }
+    .masthead a { display: block; width: 100%; max-width: 640px; line-height: 0; }
+    .masthead img { width: 100%; height: auto; }
+    main { max-width: 760px; margin: 0 auto; padding: 24px 16px 64px; }
+    article { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: clamp(18px, 4vw, 40px); }
+    h1 { font-size: 1.7rem; line-height: 1.2; margin: 0 0 4px; text-wrap: balance; }
+    h2 { font-size: 1.15rem; margin: 32px 0 8px; padding-top: 16px; border-top: 1px solid var(--line); text-wrap: balance; }
+    h3 { font-size: 1rem; margin: 20px 0 6px; }
+    p, li { max-width: 68ch; }
+    ul { padding-left: 22px; }
+    li { margin: 4px 0; }
+    a { color: var(--accent-strong); }
+    .meta { color: var(--muted); font-size: .9rem; margin: 0 0 20px; }
+    .summary { background: color-mix(in srgb, var(--accent) 12%, var(--surface)); border-left: 4px solid var(--accent); border-radius: 8px; padding: 12px 16px; margin: 20px 0; }
+    .summary ul { margin: 6px 0 0; }
+    mark { background: var(--mark); color: inherit; padding: 0 3px; border-radius: 3px; }
+    table { width: 100%; border-collapse: collapse; font-size: .92rem; margin: 8px 0; }
+    th, td { text-align: left; padding: 8px 10px 8px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+    th { color: var(--ink-2); font-size: .82rem; font-weight: 600; }
+    .table-wrap { overflow-x: auto; }
+    .back { display: inline-block; margin-top: 24px; font-weight: 600; }
+    footer { color: var(--muted); font-size: .85rem; text-align: center; margin-top: 20px; }
+  </style>
+</head>
+<body>
+  <header class="masthead">
+    <a href="./" aria-label="Volver a Libreta Maker"><img src="img/cabecera.png" alt="Libreta Maker" width="1297" height="218"></a>
+  </header>
+  <main>
+    <article>
+      <h1>Política de privacidad</h1>
+      <p class="meta">Última actualización: 24 de septiembre de 2026</p>
+
+      <p>En esta página te explicamos qué datos personales trata <strong>Libreta Maker</strong> (la app para llevar el stock, los costes y las ventas de impresión 3D, corte y grabado láser y sellos), para qué los usamos, cuánto tiempo los guardamos y qué derechos tienes. La redactamos conforme al Reglamento General de Protección de Datos (RGPD) y a la Ley Orgánica 3/2018 de Protección de Datos y garantía de los derechos digitales (LOPDGDD).</p>
+
+      <div class="summary">
+        <strong>En resumen</strong>
+        <ul>
+          <li>Solo guardamos lo necesario para que tengas tu cuenta y tu libreta.</li>
+          <li>Tu libreta es privada: ningún otro usuario puede verla.</li>
+          <li>No hay publicidad, ni analítica, ni cookies de seguimiento, y no vendemos ni cedemos tus datos.</li>
+          <li>Puedes descargar tus datos cuando quieras y pedir que borremos tu cuenta.</li>
+        </ul>
+      </div>
+
+      <h2>1. Responsable del tratamiento</h2>
+      <ul>
+        <li><strong>Responsable:</strong> <mark>[Nombre y apellidos o razón social]</mark></li>
+        <li><strong>NIF/CIF:</strong> <mark>[NIF]</mark></li>
+        <li><strong>Dirección:</strong> <mark>[Dirección postal]</mark></li>
+        <li><strong>Correo de contacto para privacidad:</strong> <mark>[correo@tudominio.com]</mark></li>
+      </ul>
+
+      <h2>2. Qué datos tratamos</h2>
+      <h3>Datos de tu cuenta</h3>
+      <ul>
+        <li><strong>Si entras con usuario y contraseña:</strong> tu nombre de usuario y tu contraseña. La contraseña nunca se guarda tal cual: solo se guarda una versión cifrada de un solo sentido (<em>hash</em>), que no permite recuperarla.</li>
+        <li><strong>Si entras con tu cuenta de Google:</strong> tu dirección de correo y tu nombre, que Google nos facilita cuando inicias sesión. No recibimos tu contraseña de Google ni accedemos a tu correo, contactos, archivos ni a ningún otro dato de tu cuenta de Google.</li>
+        <li>La fecha en que creaste la cuenta y la de tu último acceso.</li>
+      </ul>
+
+      <h3>Contenido de tu libreta</h3>
+      <p>Todo lo que tú escribes en la app: máquinas, filamentos, materiales, componentes, trabajos, ventas, gastos y ajustes, junto con un historial de las últimas versiones guardadas para que puedas recuperar datos borrados por error. Solo tú puedes verlo.</p>
+      <p>Si en tus ventas anotas datos de tus clientes (por ejemplo, su nombre), <strong>tú eres el responsable de esos datos</strong> frente a tus clientes, y nosotros solo los guardamos por cuenta tuya para que la app funcione (actuamos como encargado del tratamiento). Te recomendamos anotar solo lo imprescindible.</p>
+
+      <h3>Datos técnicos</h3>
+      <ul>
+        <li><strong>Dirección IP</strong>, usada únicamente para limitar los intentos de acceso fallidos y las altas de cuentas desde una misma conexión, y así proteger las cuentas frente a ataques. Se borra automáticamente a los 15 minutos (intentos de acceso) o a la hora (altas de cuentas).</li>
+        <li><strong>Registros del servidor</strong>: como cualquier web, el proveedor de alojamiento puede guardar temporalmente registros técnicos de las visitas (IP, fecha, página pedida) por motivos de seguridad y funcionamiento.</li>
+      </ul>
+
+      <h2>3. Para qué usamos tus datos y con qué base legal</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Finalidad</th><th>Base legal (RGPD)</th></tr></thead>
+        <tbody>
+          <tr><td>Crear y gestionar tu cuenta, permitirte entrar y guardar y sincronizar tu libreta entre tus dispositivos.</td><td>Ejecución del servicio que nos pides al registrarte (art. 6.1.b).</td></tr>
+          <tr><td>Proteger las cuentas y el servicio: limitar intentos de acceso, evitar altas masivas y mantener la seguridad del servidor.</td><td>Interés legítimo en mantener la app segura (art. 6.1.f).</td></tr>
+          <tr><td>Responder a tus consultas y solicitudes de derechos.</td><td>Cumplimiento de obligaciones legales (art. 6.1.c) y ejecución del servicio (art. 6.1.b).</td></tr>
+        </tbody>
+      </table></div>
+      <p>No usamos tus datos para publicidad, no elaboramos perfiles y no tomamos decisiones automatizadas sobre ti.</p>
+
+      <h2>4. Cuánto tiempo los guardamos</h2>
+      <ul>
+        <li><strong>Cuenta y libreta:</strong> mientras tengas la cuenta. Si pides que la borremos, eliminamos tu cuenta, tu libreta y su historial.</li>
+        <li><strong>Historial de versiones:</strong> las últimas 200 versiones guardadas de tu libreta; las más antiguas se borran solas.</li>
+        <li><strong>IP de intentos de acceso y altas:</strong> 15 minutos y 1 hora, respectivamente.</li>
+        <li><strong>Copias de seguridad del alojamiento:</strong> las que haga el proveedor se sobrescriben según su propio calendario, normalmente en pocas semanas.</li>
+      </ul>
+
+      <h2>5. Con quién compartimos tus datos</h2>
+      <p><strong>No vendemos ni cedemos tus datos a nadie.</strong> Solo intervienen:</p>
+      <ul>
+        <li><strong>Proveedor de alojamiento:</strong> <mark>[Nombre del hosting, p. ej. «Empresa de hosting S.L.»]</mark>, donde están el servidor y la base de datos, en <mark>[país, p. ej. España / la Unión Europea]</mark>. Actúa como encargado del tratamiento y solo trata los datos para prestarnos ese servicio.</li>
+        <li><strong>Google</strong>, solo si eliges «Iniciar sesión con Google»: la pantalla de acceso carga el botón oficial de Google, y es Google quien comprueba tu identidad y nos envía tu correo y tu nombre. Google trata esos datos según su propia <a href="https://policies.google.com/privacy?hl=es" target="_blank" rel="noopener">política de privacidad</a>. Google LLC está adherida al Marco de Privacidad de Datos UE-EE. UU. (<em>EU-US Data Privacy Framework</em>), que garantiza un nivel de protección adecuado.</li>
+        <li><strong>Autoridades</strong>, únicamente si una ley nos obliga a ello.</li>
+      </ul>
+
+      <h2>6. Cookies y almacenamiento en tu dispositivo</h2>
+      <ul>
+        <li><strong>Cookie de sesión</strong> (<code>DPBSESS</code>): mantiene tu sesión iniciada hasta 30 días. Es una cookie técnica, imprescindible para que la app funcione, por lo que no necesita tu consentimiento. Solo la usa esta app.</li>
+        <li><strong>Almacenamiento local del navegador</strong>: guarda preferencias como el tema claro u oscuro y, si usas la versión sin servidor, tu libreta en tu propio dispositivo.</li>
+        <li><strong>Caché de la app instalable</strong>: guarda los archivos de la app (páginas, estilos, imágenes) para que se abra más rápido y sin conexión. No contiene tus datos de la libreta.</li>
+        <li>Si usas el acceso con Google, Google puede usar sus propias cookies en su botón de inicio de sesión.</li>
+      </ul>
+      <p>No usamos cookies de publicidad ni de analítica.</p>
+
+      <h2>7. Seguridad</h2>
+      <p>La conexión con la app va cifrada (HTTPS), las contraseñas se guardan cifradas con un algoritmo de un solo sentido, cada libreta solo es accesible por su propietario y el acceso está protegido frente a intentos repetidos. Aun así, ningún sistema es infalible: usa una contraseña que no utilices en otros sitios y cierra la sesión en dispositivos compartidos.</p>
+
+      <h2>8. Tus derechos</h2>
+      <p>Puedes ejercer en cualquier momento tus derechos de <strong>acceso</strong>, <strong>rectificación</strong>, <strong>supresión</strong>, <strong>oposición</strong>, <strong>limitación del tratamiento</strong> y <strong>portabilidad</strong>:</p>
+      <ul>
+        <li>Muchos puedes ejercerlos tú mismo desde la app: modificar o borrar cualquier dato de tu libreta, cambiar tu contraseña y <strong>descargar todos tus datos</strong> en <em>Ajustes → Exportar copia (JSON)</em> o en CSV.</li>
+        <li>Para lo demás (por ejemplo, borrar tu cuenta), escríbenos a <mark>[correo@tudominio.com]</mark> indicando tu nombre de usuario. Te responderemos en el plazo máximo de un mes.</li>
+      </ul>
+      <p>Si consideras que no hemos atendido bien tus derechos, puedes presentar una reclamación ante la <a href="https://www.aepd.es" target="_blank" rel="noopener">Agencia Española de Protección de Datos</a>.</p>
+
+      <h2>9. Menores</h2>
+      <p>Libreta Maker está pensada para la gestión de un taller o negocio y no está dirigida a menores de 14 años. Si eres menor de 14 años, no crees una cuenta sin el consentimiento de tus padres o tutores.</p>
+
+      <h2>10. Cambios en esta política</h2>
+      <p>Si cambiamos la forma en que tratamos tus datos, actualizaremos esta página y la fecha de «Última actualización». Si el cambio es importante, te avisaremos dentro de la app.</p>
+
+      <a class="back" href="./">← Volver a Libreta Maker</a>
+    </article>
+    <footer>Libreta Maker · <mark>[Nombre o razón social]</mark></footer>
+  </main>
+</body>
+</html>

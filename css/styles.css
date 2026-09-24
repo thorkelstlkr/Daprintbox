@@ -294,3 +294,4 @@ textarea { resize: vertical; }
 .login-tabs { display: flex; gap: 4px; background: var(--surface-2); border-radius: 10px; padding: 4px; margin-bottom: 12px; }
 .login-tabs button { flex: 1; border: 0; background: none; color: var(--ink-2); font: inherit; padding: 8px; border-radius: 8px; cursor: pointer; }
 .login-tabs button[aria-selected="true"] { background: var(--surface); color: var(--ink); font-weight: 600; box-shadow: var(--shadow); }
+.login-legal { margin: 14px 0 0; text-align: center; }
