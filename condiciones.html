@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Condiciones de servicio · Libreta Maker</title>
+  <meta name="description" content="Condiciones para usar Libreta Maker.">
+  <meta name="theme-color" content="#74af27">
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+  <style>
+    :root {
+      color-scheme: light;
+      --page: #f5f8ef; --surface: #ffffff; --ink: #11160b; --ink-2: #4a5540; --muted: #7f8a73;
+      --line: #e1e9d3; --accent: #74af27; --accent-strong: #4a7a12; --mark: #fff3b0;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        color-scheme: dark;
+        --page: #0d1109; --surface: #161c10; --ink: #f1f5ea; --ink-2: #c2ccb3; --muted: #8a957d;
+        --line: #263020; --accent: #86c236; --accent-strong: #9fd35a; --mark: #5a4d00;
+      }
+    }
+    :root[data-theme="dark"] {
+      color-scheme: dark;
+      --page: #0d1109; --surface: #161c10; --ink: #f1f5ea; --ink-2: #c2ccb3; --muted: #8a957d;
+      --line: #263020; --accent: #86c236; --accent-strong: #9fd35a; --mark: #5a4d00;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--page); color: var(--ink); font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; }
+    .masthead { background: #fff; border-bottom: 1px solid var(--line); padding: 6px 16px; display: flex; justify-content: center; }
+    .masthead a { display: block; width: 100%; max-width: 640px; line-height: 0; }
+    .masthead img { width: 100%; height: auto; }
+    main { max-width: 760px; margin: 0 auto; padding: 24px 16px 64px; }
+    article { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: clamp(18px, 4vw, 40px); }
+    h1 { font-size: 1.7rem; line-height: 1.2; margin: 0 0 4px; text-wrap: balance; }
+    h2 { font-size: 1.15rem; margin: 32px 0 8px; padding-top: 16px; border-top: 1px solid var(--line); text-wrap: balance; }
+    h3 { font-size: 1rem; margin: 20px 0 6px; }
+    p, li { max-width: 68ch; }
+    ul { padding-left: 22px; }
+    li { margin: 4px 0; }
+    a { color: var(--accent-strong); }
+    .meta { color: var(--muted); font-size: .9rem; margin: 0 0 20px; }
+    .summary { background: color-mix(in srgb, var(--accent) 12%, var(--surface)); border-left: 4px solid var(--accent); border-radius: 8px; padding: 12px 16px; margin: 20px 0; }
+    .summary ul { margin: 6px 0 0; }
+    mark { background: var(--mark); color: inherit; padding: 0 3px; border-radius: 3px; }
+    table { width: 100%; border-collapse: collapse; font-size: .92rem; margin: 8px 0; }
+    th, td { text-align: left; padding: 8px 10px 8px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+    th { color: var(--ink-2); font-size: .82rem; font-weight: 600; }
+    .table-wrap { overflow-x: auto; }
+    .back { display: inline-block; margin-top: 24px; font-weight: 600; }
+    footer { color: var(--muted); font-size: .85rem; text-align: center; margin-top: 20px; }
+  </style>
+</head>
+<body>
+  <header class="masthead">
+    <a href="./" aria-label="Volver a Libreta Maker"><img src="img/cabecera.png" alt="Libreta Maker" width="1297" height="218"></a>
+  </header>
+  <main>
+    <article>
+      <h1>Condiciones de servicio</h1>
+      <p class="meta">Última actualización: 24 de septiembre de 2026</p>
+
+      <p>Estas condiciones regulan el uso de <strong>Libreta Maker</strong>, la app para llevar el stock, los costes y las ventas de un taller de impresión 3D, corte y grabado láser y sellos personalizados. Léelas antes de crear tu cuenta: al crearla o al usar la app, las aceptas.</p>
+
+      <div class="summary">
+        <strong>En resumen</strong>
+        <ul>
+          <li>La app es una herramienta de ayuda: sus cálculos de costes y precios son <strong>orientativos</strong>; las decisiones de tu negocio son tuyas.</li>
+          <li>Tus datos son tuyos: puedes descargarlos cuando quieras y pedir que borremos tu cuenta.</li>
+          <li>Cuida tu contraseña y no uses la app para nada ilegal ni para atacarla.</li>
+          <li>Hacemos lo posible para que funcione siempre, pero no podemos garantizarlo: haz copias de vez en cuando.</li>
+        </ul>
+      </div>
+
+      <h2>1. Quién presta el servicio</h2>
+      <p>En cumplimiento de la Ley 34/2002 de Servicios de la Sociedad de la Información y de Comercio Electrónico (LSSI):</p>
+      <ul>
+        <li><strong>Titular:</strong> <mark>[Nombre y apellidos o razón social]</mark></li>
+        <li><strong>NIF/CIF:</strong> <mark>[NIF]</mark></li>
+        <li><strong>Dirección:</strong> <mark>[Dirección postal]</mark></li>
+        <li><strong>Correo de contacto:</strong> <mark>[correo@tudominio.com]</mark></li>
+        <li><mark>[Si es una sociedad: datos de inscripción en el Registro Mercantil]</mark></li>
+      </ul>
+
+      <h2>2. Qué es Libreta Maker</h2>
+      <p>Libreta Maker te permite registrar tus máquinas, filamentos, materiales y componentes, calcular el coste de cada trabajo, obtener un precio de venta sugerido y comparar tus ingresos con tus gastos. Cada usuario tiene su propia libreta, privada, guardada en nuestro servidor.</p>
+      <p>El servicio se ofrece <strong>de forma gratuita</strong> <mark>[cámbialo si algún día cobras por él]</mark> y puede incluir mejoras o cambios con el tiempo.</p>
+
+      <h2>3. Tu cuenta</h2>
+      <ul>
+        <li>Para crear una cuenta necesitas, en su caso, el <strong>código de invitación</strong> que te facilite el titular, y debes ser mayor de edad o contar con la autorización de tus padres o tutores (y, en todo caso, tener al menos 14 años).</li>
+        <li>Cada cuenta es <strong>personal</strong>. No compartas tu contraseña ni el código de invitación con terceros sin permiso del titular.</li>
+        <li>Eres responsable de mantener tu contraseña en secreto y de lo que se haga con tu cuenta. Si crees que alguien la ha usado sin permiso, cámbiala en <em>Ajustes → Tu cuenta</em> y avísanos.</li>
+        <li>Si entras con tu cuenta de Google, también se aplican las condiciones de Google a ese inicio de sesión.</li>
+      </ul>
+
+      <h2>4. Uso aceptable</h2>
+      <p>Te comprometes a usar la app de buena fe y conforme a la ley. En particular, no puedes:</p>
+      <ul>
+        <li>Usarla para actividades ilegales o para guardar contenido ilícito.</li>
+        <li>Intentar acceder a cuentas o datos de otras personas, saltarte las medidas de seguridad, sobrecargar el servidor o automatizar peticiones de forma abusiva.</li>
+        <li>Copiar, revender o explotar comercialmente la app sin autorización.</li>
+        <li>Guardar datos especialmente sensibles (salud, ideología, datos bancarios completos, etc.): la app no está pensada para ellos.</li>
+      </ul>
+
+      <h2>5. Tus datos y tu contenido</h2>
+      <ul>
+        <li>Todo lo que registras en tu libreta <strong>es tuyo</strong>. Solo lo guardamos y tratamos para prestarte el servicio, tal como explica la <a href="privacidad.html">política de privacidad</a>.</li>
+        <li>Puedes <strong>descargar tus datos</strong> cuando quieras desde <em>Ajustes → Exportar copia (JSON)</em> o en CSV, y llevártelos a otra herramienta.</li>
+        <li>Si anotas datos de tus clientes, eres responsable de tenerlos de forma lícita e informarles; nosotros solo los guardamos por tu cuenta.</li>
+      </ul>
+
+      <h2>6. Cálculos orientativos</h2>
+      <p>Los costes, márgenes, precios sugeridos, consumos de material y resultados que muestra la app son <strong>estimaciones</strong> basadas en los datos y parámetros que tú introduces (precios, consumos, horas, porcentajes de fallos o desperdicio…). Revísalos antes de usarlos para fijar precios o tomar decisiones.</p>
+      <p>Libreta Maker <strong>no es un programa de contabilidad ni de facturación</strong> y no sustituye el asesoramiento contable, fiscal o legal. Tus obligaciones con Hacienda y la Seguridad Social son responsabilidad tuya.</p>
+
+      <h2>7. Disponibilidad y copias de seguridad</h2>
+      <ul>
+        <li>Intentamos que la app funcione de forma continua y segura, pero puede haber interrupciones por mantenimiento, fallos técnicos o causas ajenas (por ejemplo, del proveedor de alojamiento o de la conexión).</li>
+        <li>La app guarda un historial de versiones de tu libreta, pero te recomendamos <strong>exportar una copia de vez en cuando</strong>, sobre todo antes de cambios grandes.</li>
+      </ul>
+
+      <h2>8. Responsabilidad</h2>
+      <p>El servicio se presta tal cual y en su estado de funcionamiento. En la medida en que lo permita la ley, el titular no responde de los daños indirectos ni de las pérdidas de negocio derivados de decisiones tomadas con los cálculos de la app, ni de interrupciones o pérdidas de datos que no se deban a su culpa.</p>
+      <p>Nada de lo anterior limita la responsabilidad del titular en los casos en que la ley no lo permite (por ejemplo, por dolo o culpa grave), ni los derechos que te reconoce la normativa de consumidores y usuarios si usas la app como consumidor.</p>
+
+      <h2>9. Propiedad intelectual</h2>
+      <p>La app, su código, su diseño, el nombre «Libreta Maker» y sus imágenes pertenecen a su titular o a quienes le han cedido su uso. Estas condiciones te dan un permiso personal, gratuito y no exclusivo para usar la app mientras tengas la cuenta; no te ceden ningún otro derecho sobre ella.</p>
+
+      <h2>10. Baja, suspensión y fin del servicio</h2>
+      <ul>
+        <li><strong>Tú</strong> puedes dejar de usar la app cuando quieras y pedir que borremos tu cuenta y tu libreta escribiendo a <mark>[correo@tudominio.com]</mark>. Antes, exporta tus datos si los quieres conservar.</li>
+        <li><strong>El titular</strong> puede suspender o cerrar una cuenta que incumpla estas condiciones, avisando antes salvo que el incumplimiento sea grave o ponga en riesgo la seguridad del servicio.</li>
+        <li>Si el servicio dejara de prestarse, avisaremos con al menos <mark>[30]</mark> días de antelación para que puedas descargar tus datos.</li>
+      </ul>
+
+      <h2>11. Cambios en estas condiciones</h2>
+      <p>Podemos actualizar estas condiciones para adaptarlas a cambios de la app o de la ley. Actualizaremos la fecha de arriba y, si el cambio es importante, te avisaremos en la app. Si no estás de acuerdo con los cambios, puedes dejar de usarla y pedir la baja.</p>
+
+      <h2>12. Ley aplicable y reclamaciones</h2>
+      <p>Estas condiciones se rigen por la ley española. Si tienes cualquier problema, escríbenos primero a <mark>[correo@tudominio.com]</mark> e intentaremos resolverlo. Si usas la app como consumidor, podrás acudir a los juzgados de tu domicilio; en los demás casos, a los de <mark>[ciudad]</mark>.</p>
+
+      <a class="back" href="./">← Volver a Libreta Maker</a>
+    </article>
+    <footer>Libreta Maker · <mark>[Nombre o razón social]</mark> · <a href="privacidad.html">Política de privacidad</a></footer>
+  </main>
+</body>
+</html>

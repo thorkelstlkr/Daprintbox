@@ -32,6 +32,7 @@ Debe quedar así:
 libreta-maker/
 ├── index.html
 ├── privacidad.html        (política de privacidad: rellena tus datos)
+├── condiciones.html       (condiciones de servicio: rellena tus datos)
 ├── manifest.webmanifest   (datos de la app instalable)
 ├── sw.js                  (permite instalarla y abrirla sin conexión)
 ├── img/  icons/  css/
@@ -93,11 +94,16 @@ La primera vez tu libreta está vacía y puedes elegir cómo empezar:
 
 En *Ajustes → Tu cuenta* puedes **cambiar tu contraseña**, ver el **historial de versiones** de tu libreta y **cerrar sesión**.
 
-## Política de privacidad
+## Política de privacidad y condiciones de servicio
 
-El paquete incluye `privacidad.html`, una política de privacidad ya redactada según el RGPD y la LOPDGDD, que describe lo que hace la app con los datos. **Antes de publicar la web, ábrela y rellena los huecos resaltados en amarillo**: tu nombre o razón social, NIF, dirección, correo de contacto y el nombre de tu hosting. Se enlaza sola desde la pantalla de acceso y desde *Ajustes*.
+El paquete incluye dos páginas ya redactadas:
 
-Su dirección será `https://tu-dominio/libreta-maker/privacidad.html`: es la que tienes que poner en Google Cloud (pantalla de consentimiento → «Enlace a la política de privacidad») si activas el acceso con Google, o en Google Play si algún día publicáis la app.
+- `privacidad.html`: política de privacidad según el RGPD y la LOPDGDD, que describe lo que hace la app con los datos.
+- `condiciones.html`: condiciones de servicio (titular según la LSSI, uso de la cuenta, cálculos orientativos, responsabilidad, baja, ley aplicable).
+
+**Antes de publicar la web, ábrelas y rellena los huecos resaltados en amarillo** (busca los corchetes `[ ]`): tu nombre o razón social, NIF, dirección, correo de contacto, hosting, ciudad para los juzgados y plazo de aviso. Se enlazan solas desde la pantalla de acceso y desde *Ajustes*.
+
+Su dirección será `https://tu-dominio/libreta-maker/privacidad.html`: es la que tienes que poner en Google Cloud (pantalla de consentimiento → «Enlace a la política de privacidad»; la de las condiciones, `…/condiciones.html`, va en «Enlace a las condiciones del servicio») si activas el acceso con Google, o en Google Play si algún día publicáis la app.
 
 > Es un texto de partida redactado con cuidado, pero no es asesoramiento legal: si la app va a usarla gente ajena a tu negocio, conviene que lo revise un profesional.
 
