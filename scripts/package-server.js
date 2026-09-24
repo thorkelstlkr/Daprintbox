@@ -18,7 +18,10 @@ const copy = (rel) => {
 };
 
 ['index.html', 'css/styles.css', 'js/calc.js', 'js/store.js', 'js/remote.js', 'js/app.js',
-  'api/api.php', 'api/lib.php', 'api/setup.php', 'api/config.example.php', 'api/.htaccess', 'INSTALACION.md'].forEach(copy);
+  'api/api.php', 'api/lib.php', 'api/setup.php', 'api/config.example.php', 'api/.htaccess', 'INSTALACION.md',
+  'manifest.webmanifest', 'sw.js',
+  ...fs.readdirSync(path.join(root, 'icons')).filter((f) => f.endsWith('.png') && f !== 'original.png').map((f) => `icons/${f}`),
+].forEach(copy);
 
 // En el servidor la app usa la API
 fs.writeFileSync(path.join(out, 'js', 'config.js'), fs.readFileSync(path.join(root, 'js', 'config.js'), 'utf8')

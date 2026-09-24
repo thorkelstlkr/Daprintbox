@@ -111,6 +111,27 @@
   const remote = !!(window.Remote && window.Remote.enabled);
   const sync = { ready: false, user: null, email: '', version: 0, pending: false, saving: false, error: '', updatedBy: '', updatedAt: '' };
 
+  // App instalable (PWA): solo cuando la página se sirve con manifiesto (versión web/servidor)
+  const pwa = {
+    supported: 'serviceWorker' in navigator && /^https?:$/.test(location.protocol) && !!document.querySelector('link[rel="manifest"]'),
+    installed: window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true,
+    prompt: null,
+  };
+  if (pwa.supported) {
+    window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js').catch(() => {}); });
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      pwa.prompt = e;
+      if (currentView() === 'settings') render();
+    });
+    window.addEventListener('appinstalled', () => {
+      pwa.prompt = null;
+      pwa.installed = true;
+      toast('Daprintbox instalada');
+      if (currentView() === 'settings') render();
+    });
+  }
+
   function persist(msg) {
     if (remote) {
       sync.ready = true;
@@ -1345,6 +1366,19 @@
         <button class="btn primary" type="submit">Guardar ajustes</button>
       </form>
 
+      ${pwa.supported ? `<div class="card">
+        <h2>Instalar en el móvil o el ordenador</h2>
+        ${pwa.installed ? '<p class="small">✓ Estás usando Daprintbox como app instalada.</p>'
+          : pwa.prompt ? `<p class="small">Instala Daprintbox como una app: icono en la pantalla de inicio, pantalla completa y funciona sin conexión.</p>
+            <button class="btn primary" data-action="install-app">Instalar la app</button>`
+          : `<p class="small">Para tenerla como una app con su icono:</p>
+            <ul class="small" style="margin:0;padding-left:20px">
+              <li><b>Android (Chrome):</b> menú <b>⋮</b> → <b>Instalar aplicación</b> o <b>Añadir a pantalla de inicio</b>.</li>
+              <li><b>iPhone (Safari):</b> botón <b>Compartir</b> → <b>Añadir a pantalla de inicio</b>.</li>
+              <li><b>Ordenador (Chrome o Edge):</b> icono de instalar a la derecha de la barra de direcciones.</li>
+            </ul>`}
+      </div>` : ''}
+
       <div class="card">
         <h2>Apariencia</h2>
         <div class="filters">${field('Tema', `<select id="theme-select">${[['auto', 'Automático'], ['light', 'Claro'], ['dark', 'Oscuro']].map(([k, v]) => `<option value="${k}"${k === theme ? ' selected' : ''}>${v}</option>`).join('')}</select>`)}</div>
@@ -1976,6 +2010,13 @@
       }, 'Empezar desde cero');
     },
     'backup-text': () => backupTextForm(),
+    'install-app': async () => {
+      if (!pwa.prompt) return;
+      pwa.prompt.prompt();
+      try { await pwa.prompt.userChoice; } catch (e) { /* cancelado */ }
+      pwa.prompt = null;
+      render();
+    },
     'history': () => historyForm(),
     'logout': async () => {
       if (sync.pending || sync.saving) { toast('Espera a que se guarden los cambios antes de salir.', 4000); return; }

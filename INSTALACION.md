@@ -45,6 +45,9 @@ Debe quedar así:
 ```
 daprintbox/
 ├── index.html
+├── manifest.webmanifest   (datos de la app instalable)
+├── sw.js                  (permite instalarla y abrirla sin conexión)
+├── icons/
 ├── css/
 ├── js/            (config.js ya apunta a api/api.php)
 └── api/
@@ -99,6 +102,18 @@ Abre `https://tu-dominio/daprintbox/`, pulsa **Iniciar sesión con Google** y, c
 - **Pegar una copia en texto**: en la versión que usabais hasta ahora (por ejemplo el enlace de Claude), ve a *Ajustes → Copia en texto → Copiar al portapapeles* y pégalo aquí.
 - **Subir los datos de este navegador**: si ya usabas la app en este mismo navegador y dirección.
 - **Empezar vacío** o **Datos de ejemplo**.
+
+## 7. Instalarla en el móvil (Android) como una app
+
+Daprintbox es una app instalable: se abre a pantalla completa, con su icono en la pantalla de inicio y en la lista de aplicaciones.
+
+- **Android (Chrome):** abre la dirección de la app, entra con tu cuenta y ve a *Ajustes → Instalar la app*. Si no aparece el botón, usa el menú **⋮** → **Instalar aplicación** (o **Añadir a pantalla de inicio**).
+- **iPhone (Safari):** botón **Compartir** → **Añadir a pantalla de inicio**.
+- **Ordenador (Chrome o Edge):** icono de instalar a la derecha de la barra de direcciones.
+
+Las actualizaciones llegan solas: cuando subas una versión nueva al servidor, la app la usa la próxima vez que se abra con conexión. Sin conexión la app se abre igualmente, pero para ver y guardar los datos compartidos necesita conectar con el servidor.
+
+> Requisito: la web debe ir por **HTTPS** (el mismo que pide el acceso con Google).
 
 ## Cómo funciona el trabajo entre dos personas
 

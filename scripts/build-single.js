@@ -20,7 +20,11 @@ const markup = body
   .replace(/\s*<script src="([^"]+)"><\/script>/g, (_, src) => (SERVER_ONLY.includes(src) ? ''
     : `\n<script>\n${read(src).replace(/<\/script/gi, '<\\/script')}\n</script>`));
 
-const out = `${title}\n<style>\n${css}\n</style>\n${markup.trim()}\n`;
+// Un solo archivo: el logo va incrustado y sin manifiesto ni service worker (no aplican aquí)
+const logo = `data:image/png;base64,${fs.readFileSync(path.join(root, 'icons', 'icon-96.png')).toString('base64')}`;
+const page = markup.replace('src="icons/icon-96.png"', `src="${logo}"`);
+
+const out = `${title}\n<style>\n${css}\n</style>\n${page.trim()}\n`;
 fs.mkdirSync(path.join(root, 'dist'), { recursive: true });
 fs.writeFileSync(path.join(root, 'dist', 'daprintbox.html'), out);
 console.log(`dist/daprintbox.html (${(out.length / 1024).toFixed(1)} KB)`);

@@ -27,6 +27,10 @@ Los datos se guardan en el `localStorage` del navegador. Desde **Ajustes** puede
 
 Si ya usabas una versión anterior, la impresora que tenías en Ajustes se convierte automáticamente en tu primera máquina y los trabajos existentes se consideran de impresión 3D.
 
+## App instalable (Android, iPhone, ordenador)
+
+Servida desde una web con HTTPS, Daprintbox se puede instalar como una app (PWA): icono propio en la pantalla de inicio, pantalla completa y apertura sin conexión. En Android: *Ajustes → Instalar la app* o menú ⋮ → *Instalar aplicación*. Los iconos están en `icons/` (generados a partir de `icons/original.png`).
+
 ## Usarla entre varias personas (servidor con PHP + MySQL)
 
 La app puede guardar los datos en una base de datos MySQL de tu servidor para que varias personas trabajen con los mismos datos, entrando con su cuenta de Google (solo los correos autorizados) o con usuario y contraseña. La API funciona con PHP 5.6 o superior. Incluye aviso cuando dos personas guardan a la vez, actualización automática de los cambios de los demás e historial de versiones para restaurar.
