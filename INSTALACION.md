@@ -101,7 +101,7 @@ El paquete incluye dos páginas pensadas para un uso **privado entre amigos, gra
 - `privacidad.html`: qué datos guarda la app, quién puede verlos, cuánto tiempo y cómo descargarlos o borrarlos.
 - `condiciones.html`: reglas básicas de uso (cuenta personal, buen uso, cálculos orientativos, sin garantías, baja).
 
-**Antes de publicar la web, ábrelas y rellena los huecos resaltados en amarillo** (busca los corchetes `[ ]`): tu nombre, tu correo, el nombre de tu hosting y el plazo de aviso si se cierra la app. Se enlazan solas desde la pantalla de acceso y desde *Ajustes*.
+Ya están rellenas con los datos del administrador (Kike Silva, kikeradiactiu@gmail.com, www.kikesilva.es); si cambian, edítalas con cualquier editor de texto. Se enlazan solas desde la pantalla de acceso y desde *Ajustes*.
 
 Si activas el acceso con Google, en la pantalla de consentimiento de Google Cloud pon `https://tu-dominio/libreta-maker/privacidad.html` como «Enlace a la política de privacidad» y `…/condiciones.html` como «Enlace a las condiciones del servicio».
 
