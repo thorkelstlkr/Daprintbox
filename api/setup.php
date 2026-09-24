@@ -18,8 +18,8 @@ header('Cache-Control: no-store');
 header('X-Frame-Options: DENY');
 
 $config = dpb_config();
-$setupKey = (string) dpb_get($config, 'setup_key', '');
-$key = (string) dpb_get($_POST, 'setup_key', '');
+$setupKey = trim((string) dpb_get($config, 'setup_key', ''));
+$key = trim((string) dpb_get($_POST, 'setup_key', ''));
 $messages = array();
 $errors = array();
 $users = array();
@@ -43,7 +43,9 @@ if ($keyProblem !== '') {
 } elseif (dpb_get($_SERVER, 'REQUEST_METHOD') === 'POST') {
     if (!hash_equals($setupKey, $key)) {
         usleep(500000);
-        $errors[] = 'Clave de instalación incorrecta.';
+        $len = function ($t) { return function_exists('mb_strlen') ? mb_strlen($t, 'UTF-8') : strlen($t); };
+        $errors[] = 'La clave de instalación no coincide con la «setup_key» de api/config.php. Has escrito ' . $len($key)
+            . ' caracteres y la de config.php tiene ' . $len($setupKey) . '. Lo más fácil: copia la clave de config.php (lo que hay entre las comillas) y pégala aquí. Distingue mayúsculas y minúsculas.';
     } else {
         $authorized = true;
 
@@ -170,7 +172,8 @@ function hidden_key($key)
     <p class="muted">Escribe la <b>setup_key</b> que pusiste en <code>api/config.php</code>. Se comprobará el servidor y se crearán o actualizarán las tablas.</p>
     <form method="post">
       <label for="k1">Clave de instalación</label>
-      <input id="k1" type="password" name="setup_key" required autocomplete="off">
+      <input id="k1" type="password" name="setup_key" required autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false">
+      <label style="display:flex;gap:6px;align-items:center;font-weight:400"><input type="checkbox" style="width:auto" onclick="document.getElementById('k1').type = this.checked ? 'text' : 'password'"> Mostrar lo que escribo</label>
       <button type="submit">Continuar</button>
     </form>
   </section>
