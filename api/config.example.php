@@ -12,22 +12,34 @@ return array(
     'db_user' => 'usuario_mysql',
     'db_pass' => 'contraseña_mysql',
 
-    // Formas de entrar: 'google' (cuenta de Google) y/o 'password' (usuario y contraseña de setup.php)
-    'login_methods' => array('google'),
+    // Formas de entrar: 'password' (usuario y contraseña) y/o 'google' (cuenta de Google).
+    // Cada usuario tiene su propia libreta: sus datos son privados.
+    'login_methods' => array('password'),
 
-    // Acceso con Google: el "ID de cliente" que crea Google Cloud (ver INSTALACION.md)
+    // ¿Se pueden crear cuentas desde la propia app (botón «Crear cuenta»)?
+    // Si es false, solo tú creas usuarios desde setup.php.
+    'allow_registration' => true,
+
+    // Código de invitación que hay que escribir para crear una cuenta ('' = sin código).
+    // Muy recomendable: así un desconocido no puede registrarse en tu servidor.
+    'registration_code' => 'cambia-este-codigo',
+
+    // Número máximo de cuentas (0 = sin límite).
+    'max_users' => 0,
+
+    // Acceso con Google (solo si añades 'google' a login_methods): el "ID de cliente" de Google Cloud (ver INSTALACION.md)
     'google_client_id' => 'xxxxxxxxxxxx-xxxxxxxxxxxxxxxx.apps.googleusercontent.com',
 
-    // Correos de Google que pueden entrar. También vale un dominio entero: '@mitaller.com'
+    // Correos de Google que pueden entrar (cada uno con su libreta). También vale un dominio entero: '@mitaller.com'
     'allowed_emails' => array(
         'persona1@gmail.com',
         'persona2@gmail.com',
     ),
 
-    // Clave para usar setup.php (comprobar el servidor, crear tablas y usuarios). Pon una frase larga y secreta.
+    // Clave para usar setup.php (comprobar el servidor, tablas y usuarios). Pon una frase larga y secreta.
     'setup_key' => 'cambia-esto-por-una-clave-larga-y-secreta',
 
-    // Cuántas versiones anteriores de los datos se guardan como copia de seguridad.
+    // Cuántas versiones anteriores de cada libreta se guardan como copia de seguridad.
     'history_keep' => 200,
 
     // Tamaño máximo de los datos en MB.

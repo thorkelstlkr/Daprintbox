@@ -36,6 +36,8 @@
     enabled: base !== '',
     authConfig: () => call('auth_config'),
     me: () => call('me'),
+    register: (username, password, code) => call('register', { method: 'POST', body: { username, password, code } }),
+    changePassword: (current, password) => call('change_password', { method: 'POST', body: { current, password } }),
     loginGoogle: (credential) => call('login_google', { method: 'POST', body: { credential } }),
     login: (username, password) => call('login', { method: 'POST', body: { username, password } }),
     logout: () => call('logout', { method: 'POST', body: {} }),

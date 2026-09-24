@@ -1385,11 +1385,12 @@
       </div>
 
       ${remote ? `<div class="card">
-        <h2>Servidor compartido</h2>
-        <p class="small">Has entrado como <b>${esc(sync.user || '')}</b>${sync.email ? ` (${esc(sync.email)})` : ''}. Los datos se guardan en el servidor y los ve todo el equipo.</p>
-        <p class="small muted">Versión ${fmtNum(sync.version)}${sync.updatedBy ? ` · último cambio de ${esc(sync.updatedBy)}${sync.updatedAt ? ' el ' + esc(fmtDateTime(sync.updatedAt)) : ''}` : ''}</p>
+        <h2>Tu cuenta</h2>
+        <p class="small">Has entrado como <b>${esc(sync.user || '')}</b>${sync.email ? ` (${esc(sync.email)})` : ''}. Esta libreta es <b>solo tuya</b>: se guarda en el servidor y ningún otro usuario puede verla.</p>
+        <p class="small muted">Versión ${fmtNum(sync.version)}${sync.updatedAt ? ` · último cambio el ${esc(fmtDateTime(sync.updatedAt))}` : ''}</p>
         <div class="filters">
           <button class="btn" data-action="history">Historial de versiones</button>
+          ${sync.email ? '' : '<button class="btn" data-action="change-password">Cambiar contraseña</button>'}
           <button class="btn" data-action="logout">Cerrar sesión</button>
         </div>
       </div>` : ''}
@@ -1615,7 +1616,7 @@
       if (e.status === 409 && e.data) {
         // Otra persona guardó antes: se cargan sus datos para no pisarlos
         applyRemote(e.data);
-        toast(`${e.data.updated_by || 'Otra persona'} guardó cambios justo antes: se han cargado sus datos. Repite tu último cambio.`, 8000);
+        toast('Se guardaron cambios desde otro dispositivo justo antes: se han cargado. Repite tu último cambio.', 8000);
       } else if (e.status === 401) {
         Object.assign(sync, { pending: true, error: 'Sesión caducada' });
         showLogin('Tu sesión ha caducado. Vuelve a entrar y se guardarán tus cambios.');
@@ -1644,7 +1645,7 @@
       const r = await window.Remote.load(sync.version);
       if (r.unchanged || sync.pending || sync.saving || modal.open) return;
       applyRemote(r);
-      toast(`Datos actualizados: ${r.updated_by || 'otra persona'} hizo cambios.`, 4000);
+      toast('Libreta actualizada con los cambios hechos en otro dispositivo.', 4000);
     } catch (e) {
       if (e.status === 401) showLogin('Tu sesión ha caducado. Vuelve a entrar.');
     }
@@ -1700,7 +1701,7 @@
     }
   }
 
-  async function showLogin(message) {
+  async function showLogin(message, mode = 'login') {
     sync.ready = false;
     $('.tabs').hidden = true;
     updateSyncBadge();
@@ -1715,24 +1716,40 @@
     }
     const withGoogle = authConfig.methods.includes('google') && authConfig.google_client_id;
     const withPassword = authConfig.methods.includes('password');
+    const registering = mode === 'register' && withPassword && authConfig.registration;
     view.innerHTML = `<div class="card login">
-      <h2>Entrar</h2>
-      <p class="small muted">Entra para ver y guardar los datos compartidos del taller.</p>
+      ${withPassword && authConfig.registration ? `<div class="login-tabs" role="tablist">
+        <button type="button" role="tab" aria-selected="${!registering}" data-mode="login">Entrar</button>
+        <button type="button" role="tab" aria-selected="${registering}" data-mode="register">Crear cuenta</button>
+      </div>` : '<h2>Entrar</h2>'}
+      <p class="small muted">${registering
+        ? 'Crea tu cuenta: tendrás tu propia libreta, privada, guardada en el servidor.'
+        : 'Entra para ver y guardar tu libreta.'}</p>
       ${message ? `<p class="small neg">${esc(message)}</p>` : ''}
-      ${withGoogle ? '<div id="google-btn" class="google-btn"><span class="small muted">Cargando el acceso con Google…</span></div>' : ''}
-      ${withGoogle && withPassword ? '<p class="login-or small muted">o con usuario y contraseña</p>' : ''}
+      ${withGoogle && !registering ? '<div id="google-btn" class="google-btn"><span class="small muted">Cargando el acceso con Google…</span></div>' : ''}
+      ${withGoogle && withPassword && !registering ? '<p class="login-or small muted">o con usuario y contraseña</p>' : ''}
       ${withPassword ? `<form id="login-form" novalidate>
         <div class="form-grid" style="grid-template-columns:1fr">
-          <div class="field"><label for="login-user">Usuario</label><input id="login-user" name="username" autocomplete="username" required></div>
-          <div class="field"><label for="login-pass">Contraseña</label><input id="login-pass" name="password" type="password" autocomplete="current-password" required></div>
+          <div class="field"><label for="login-user">Usuario</label>
+            <input id="login-user" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" required>
+            ${registering ? '<span class="hint">Entre 2 y 50 letras, números, puntos o guiones, sin espacios.</span>' : ''}</div>
+          <div class="field"><label for="login-pass">Contraseña</label>
+            <input id="login-pass" name="password" type="password" autocomplete="${registering ? 'new-password' : 'current-password'}" required>
+            ${registering ? '<span class="hint">Mínimo 8 caracteres.</span>' : ''}</div>
+          ${registering ? `<div class="field"><label for="login-pass2">Repite la contraseña</label>
+            <input id="login-pass2" type="password" autocomplete="new-password" required></div>
+          ${authConfig.registration_code ? `<div class="field"><label for="login-code">Código de invitación</label>
+            <input id="login-code" autocomplete="off" autocapitalize="none" spellcheck="false" required>
+            <span class="hint">Te lo da quien administra este servidor.</span></div>` : ''}` : ''}
         </div>
-        <button class="btn${withGoogle ? '' : ' primary'}" type="submit" style="margin-top:12px">Entrar</button>
+        <button class="btn${withGoogle && !registering ? '' : ' primary'}" type="submit" style="margin-top:12px">${registering ? 'Crear cuenta y entrar' : 'Entrar'}</button>
       </form>` : ''}
       <p class="small neg" id="login-error" hidden></p>
     </div>`;
+    $$('[data-mode]', view).forEach((b) => b.addEventListener('click', () => showLogin('', b.dataset.mode)));
     const showError = (msg) => { const el = $('#login-error'); el.textContent = msg; el.hidden = false; };
 
-    if (withGoogle) {
+    if (withGoogle && !registering) {
       loadGoogleScript().then((google) => {
         const box = $('#google-btn');
         if (!box) return;
@@ -1766,7 +1783,16 @@
         btn.disabled = true;
         $('#login-error').hidden = true;
         try {
-          const r = await window.Remote.login($('#login-user').value.trim(), $('#login-pass').value);
+          const user = $('#login-user').value.trim();
+          const pass = $('#login-pass').value;
+          let r;
+          if (registering) {
+            if (pass !== $('#login-pass2').value) throw new Error('Las dos contraseñas no coinciden.');
+            r = await window.Remote.register(user, pass, $('#login-code') ? $('#login-code').value.trim() : '');
+            toast(`Cuenta «${r.username}» creada. ¡Bienvenido/a a tu libreta!`, 5000);
+          } else {
+            r = await window.Remote.login(user, pass);
+          }
           await afterLogin(r);
         } catch (ex) {
           showError(ex.message);
@@ -1795,15 +1821,15 @@
     const localCount = local.filaments.length + local.materials.length + local.prints.length + local.sales.length + local.expenses.length;
     const hasLocal = localCount > 0 && !local.demo;
     view.innerHTML = `<div class="card">
-      <h2>La base de datos está vacía</h2>
-      <p>¿Con qué datos queréis empezar? Lo que elijas se guardará en el servidor y lo verán todos los usuarios.</p>
+      <h2>Tu libreta está vacía</h2>
+      <p>¿Con qué datos quieres empezar? Lo que elijas se guardará en tu libreta del servidor; solo tú podrás verla.</p>
       <div class="filters">
         ${hasLocal ? `<button class="btn primary" data-first="local">Subir los datos de este navegador (${localCount} registros)</button>` : ''}
         <button class="btn${hasLocal ? '' : ' primary'}" data-first="paste">Pegar una copia en texto</button>
         <button class="btn" data-first="empty">Empezar vacío</button>
         <button class="btn" data-first="demo">Datos de ejemplo</button>
       </div>
-      <p class="small muted">¿Tenéis los datos en otro ordenador? Allí, en Ajustes → «Copia en texto», copiadlos y pegadlos aquí.</p>
+      <p class="small muted">¿Tienes tus datos en otro sitio (otro navegador o el enlace de Claude)? Allí, en Ajustes → «Copia en texto», cópialos y pégalos aquí.</p>
     </div>`;
     const start = (state, msg) => { S = state; persist(msg); };
     $$('[data-first]', view).forEach((btn) => btn.addEventListener('click', () => {
@@ -2018,6 +2044,24 @@
       render();
     },
     'history': () => historyForm(),
+    'change-password': () => openModal({
+      title: 'Cambiar contraseña',
+      submitLabel: 'Cambiar contraseña',
+      body: `<div class="form-grid" style="grid-template-columns:1fr">
+        ${field('Contraseña actual', '<input type="password" name="current" autocomplete="current-password" required>')}
+        ${field('Contraseña nueva', '<input type="password" name="password" autocomplete="new-password" minlength="8" required>', { hint: 'Mínimo 8 caracteres.' })}
+        ${field('Repite la contraseña nueva', '<input type="password" name="password2" autocomplete="new-password" required>')}
+      </div>`,
+      onSubmit: (b) => {
+        const cur = $('[name="current"]', b).value, pw = $('[name="password"]', b).value;
+        if (pw !== $('[name="password2"]', b).value) { toast('Las dos contraseñas nuevas no coinciden.'); return false; }
+        if (pw.length < 8) { toast('La contraseña nueva debe tener al menos 8 caracteres.'); return false; }
+        window.Remote.changePassword(cur, pw)
+          .then(() => { modal.close(); toast('Contraseña cambiada'); })
+          .catch((e) => toast(e.message, 5000));
+        return false;
+      },
+    }),
     'logout': async () => {
       if (sync.pending || sync.saving) { toast('Espera a que se guarden los cambios antes de salir.', 4000); return; }
       try { await window.Remote.logout(); } catch (e) { /* la sesión ya no existe */ }

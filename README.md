@@ -31,15 +31,15 @@ Si ya usabas una versión anterior, la impresora que tenías en Ajustes se convi
 
 Servida desde una web con HTTPS, Libreta Maker se puede instalar como una app (PWA): icono propio en la pantalla de inicio, pantalla completa y apertura sin conexión. En Android: *Ajustes → Instalar la app* o menú ⋮ → *Instalar aplicación*. Los iconos están en `icons/` (generados a partir de `icons/original.png`).
 
-## Usarla entre varias personas (servidor con PHP + MySQL)
+## Versión con servidor: cuentas de usuario y MySQL
 
-La app puede guardar los datos en una base de datos MySQL de tu servidor para que varias personas trabajen con los mismos datos, entrando con su cuenta de Google (solo los correos autorizados) o con usuario y contraseña. La API funciona con PHP 5.6 o superior. Incluye aviso cuando dos personas guardan a la vez, actualización automática de los cambios de los demás e historial de versiones para restaurar.
+La app puede guardar los datos en una base de datos MySQL de tu servidor. **Cada usuario tiene su propia libreta privada**: entra con usuario y contraseña (se puede crear cuenta desde la app con un código de invitación) u, opcionalmente, con Google. Se sincroniza entre los dispositivos del mismo usuario, avisa si se guarda a la vez desde dos sitios y guarda un historial de versiones por usuario. La API funciona con PHP 5.6 o superior.
 
 ```bash
 npm run package   # crea dist/libreta-maker-servidor.zip listo para subir
 ```
 
-Los pasos (crear la base de datos, subir los archivos, `api/config.php`, `api/setup.php` para crear usuarios) están en **[INSTALACION.md](INSTALACION.md)**.
+Los pasos (base de datos, subir archivos, `api/config.php`, `api/setup.php` para comprobar el servidor y gestionar usuarios) están en **[INSTALACION.md](INSTALACION.md)**.
 
 ## Cómo se calcula el coste
 

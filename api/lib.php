@@ -55,39 +55,132 @@ function dpb_db()
     return $pdo;
 }
 
-/** Crea las tablas si no existen (lo usa setup.php). */
+function dpb_table_exists($db, $table)
+{
+    $q = $db->prepare('SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?');
+    $q->execute(array($table));
+    return (int) $q->fetchColumn() > 0;
+}
+
+function dpb_column_exists($db, $table, $column)
+{
+    $q = $db->prepare('SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?');
+    $q->execute(array($table, $column));
+    return (int) $q->fetchColumn() > 0;
+}
+
+function dpb_index_exists($db, $table, $index)
+{
+    $q = $db->prepare('SELECT COUNT(*) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ?');
+    $q->execute(array($table, $index));
+    return (int) $q->fetchColumn() > 0;
+}
+
+/**
+ * Crea las tablas si no existen y actualiza las de versiones anteriores (lo usa setup.php).
+ * Cada usuario tiene su propia libreta: una fila en dpb_user_state y su historial en dpb_history.
+ */
 function dpb_install($db)
 {
+    $opts = 'ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci';
     $db->exec("CREATE TABLE IF NOT EXISTS dpb_users (
         id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-        username VARCHAR(50) NOT NULL UNIQUE,
-        password_hash VARCHAR(255) NOT NULL,
-        created_at DATETIME NOT NULL
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-    $db->exec("CREATE TABLE IF NOT EXISTS dpb_state (
-        id TINYINT UNSIGNED PRIMARY KEY,
+        username VARCHAR(100) NOT NULL UNIQUE,
+        password_hash VARCHAR(255) NULL,
+        email VARCHAR(190) NULL,
+        display_name VARCHAR(100) NULL,
+        created_at DATETIME NOT NULL,
+        last_login_at DATETIME NULL
+    ) $opts");
+    $db->exec("CREATE TABLE IF NOT EXISTS dpb_user_state (
+        user_id INT UNSIGNED PRIMARY KEY,
         data LONGTEXT NULL,
         version INT UNSIGNED NOT NULL DEFAULT 0,
         updated_at DATETIME NULL,
         updated_by VARCHAR(100) NULL
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    ) $opts");
     $db->exec("CREATE TABLE IF NOT EXISTS dpb_history (
         id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        user_id INT UNSIGNED NULL,
         version INT UNSIGNED NOT NULL,
         data LONGTEXT NOT NULL,
         saved_at DATETIME NOT NULL,
         saved_by VARCHAR(100) NOT NULL,
-        INDEX (version)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+        INDEX dpb_history_user (user_id, version)
+    ) $opts");
     $db->exec("CREATE TABLE IF NOT EXISTS dpb_login_attempts (
         ip VARCHAR(45) NOT NULL,
         attempted_at DATETIME NOT NULL,
         INDEX (ip, attempted_at)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-    // Instalaciones anteriores: nombres de usuario más largos (correos de Google)
-    $db->exec("ALTER TABLE dpb_state MODIFY updated_by VARCHAR(100) NULL");
+    ) $opts");
+    $db->exec("CREATE TABLE IF NOT EXISTS dpb_signups (
+        ip VARCHAR(45) NOT NULL,
+        created_at DATETIME NOT NULL,
+        INDEX (ip, created_at)
+    ) $opts");
+
+    // Actualización desde versiones anteriores (una sola libreta compartida)
+    $db->exec("ALTER TABLE dpb_users MODIFY username VARCHAR(100) NOT NULL");
+    $db->exec("ALTER TABLE dpb_users MODIFY password_hash VARCHAR(255) NULL");
+    foreach (array('email' => 'VARCHAR(190) NULL', 'display_name' => 'VARCHAR(100) NULL', 'last_login_at' => 'DATETIME NULL') as $col => $type) {
+        if (!dpb_column_exists($db, 'dpb_users', $col)) {
+            $db->exec("ALTER TABLE dpb_users ADD $col $type");
+        }
+    }
+    if (!dpb_index_exists($db, 'dpb_users', 'dpb_users_email')) {
+        $db->exec("ALTER TABLE dpb_users ADD UNIQUE INDEX dpb_users_email (email)");
+    }
     $db->exec("ALTER TABLE dpb_history MODIFY saved_by VARCHAR(100) NOT NULL");
-    $db->exec("INSERT IGNORE INTO dpb_state (id, data, version) VALUES (1, NULL, 0)");
+    if (!dpb_column_exists($db, 'dpb_history', 'user_id')) {
+        $db->exec("ALTER TABLE dpb_history ADD user_id INT UNSIGNED NULL AFTER id");
+    }
+    if (!dpb_index_exists($db, 'dpb_history', 'dpb_history_user')) {
+        $db->exec("ALTER TABLE dpb_history ADD INDEX dpb_history_user (user_id, version)");
+    }
+}
+
+/** Datos de la libreta compartida de versiones anteriores que aún no se han asignado a un usuario. */
+function dpb_legacy_state($db)
+{
+    if (!dpb_table_exists($db, 'dpb_state')) {
+        return null;
+    }
+    $row = $db->query('SELECT data, version, updated_at, updated_by FROM dpb_state WHERE id = 1')->fetch();
+    return ($row && $row['data'] !== null) ? $row : null;
+}
+
+/** Pasa la libreta compartida antigua (y su historial) a un usuario sin datos. Devuelve true o el motivo del error. */
+function dpb_assign_legacy_state($db, $userId)
+{
+    $legacy = dpb_legacy_state($db);
+    if (!$legacy) {
+        return 'No hay datos antiguos que asignar.';
+    }
+    $q = $db->prepare('SELECT data FROM dpb_user_state WHERE user_id = ?');
+    $q->execute(array($userId));
+    $current = $q->fetch();
+    if ($current && $current['data'] !== null) {
+        return 'Ese usuario ya tiene datos en su libreta. Elige uno sin datos (o crea uno nuevo).';
+    }
+    $db->beginTransaction();
+    $db->prepare('INSERT INTO dpb_user_state (user_id, data, version, updated_at, updated_by) VALUES (?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE data = VALUES(data), version = GREATEST(version, VALUES(version)) + 1, updated_at = VALUES(updated_at), updated_by = VALUES(updated_by)')
+        ->execute(array($userId, $legacy['data'], (int) $legacy['version'], $legacy['updated_at'], $legacy['updated_by']));
+    $db->prepare('UPDATE dpb_history SET user_id = ? WHERE user_id IS NULL')->execute(array($userId));
+    $db->exec('UPDATE dpb_state SET data = NULL WHERE id = 1');
+    $db->commit();
+    return true;
+}
+
+/** Nombre de usuario válido: 2–50 letras, números, puntos, guiones o guiones bajos. */
+function dpb_valid_username($username)
+{
+    return preg_match('/^[\p{L}\p{N}._-]{2,50}$/u', $username) === 1;
+}
+
+function dpb_mb_cut($text, $length)
+{
+    return function_exists('mb_substr') ? mb_substr($text, 0, $length, 'UTF-8') : substr($text, 0, $length);
 }
 
 function dpb_json($data, $status = 200)
@@ -128,6 +221,12 @@ function dpb_start_session()
         session_set_cookie_params($lifetime, $path . '; samesite=Strict', null, dpb_is_https(), true);
     }
     session_start();
+}
+
+/** Id del usuario con sesión iniciada (null si no hay sesión). */
+function dpb_current_uid()
+{
+    return isset($_SESSION['uid']) ? (int) $_SESSION['uid'] : null;
 }
 
 function dpb_current_user()
