@@ -1716,7 +1716,7 @@
     const withGoogle = authConfig.methods.includes('google') && authConfig.google_client_id;
     const withPassword = authConfig.methods.includes('password');
     view.innerHTML = `<div class="card login">
-      <h1>Libreta Maker</h1>
+      <h2>Entrar</h2>
       <p class="small muted">Entra para ver y guardar los datos compartidos del taller.</p>
       ${message ? `<p class="small neg">${esc(message)}</p>` : ''}
       ${withGoogle ? '<div id="google-btn" class="google-btn"><span class="small muted">Cargando el acceso con Google…</span></div>' : ''}
