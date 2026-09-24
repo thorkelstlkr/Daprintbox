@@ -98,6 +98,7 @@ function start_user_session($db, $row)
     $name = trim((string) dpb_get($row, 'display_name', ''));
     $_SESSION['uid'] = (int) $row['id'];
     $_SESSION['user'] = $name !== '' ? $name : $row['username'];
+    $_SESSION['username'] = $row['username'];
     $_SESSION['email'] = (string) dpb_get($row, 'email', '');
     $db->prepare('UPDATE dpb_users SET last_login_at = ? WHERE id = ?')->execute(array(dpb_now(), (int) $row['id']));
     $db->prepare('INSERT IGNORE INTO dpb_user_state (user_id, data, version) VALUES (?, NULL, 0)')->execute(array((int) $row['id']));
@@ -133,7 +134,7 @@ $db = dpb_db();
 switch ($action) {
     case 'me':
         require_uid();
-        dpb_json(array('ok' => true, 'app' => 'libreta-maker', 'user' => dpb_current_user(), 'email' => dpb_get($_SESSION, 'email', '')));
+        dpb_json(array('ok' => true, 'app' => 'libreta-maker', 'user' => dpb_current_user(), 'username' => dpb_get($_SESSION, 'username', dpb_current_user()), 'email' => dpb_get($_SESSION, 'email', '')));
         break;
 
     case 'register':

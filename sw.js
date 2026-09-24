@@ -3,10 +3,10 @@
  * Estrategia «red primero»: con conexión siempre se usa la versión más reciente del servidor;
  * sin conexión se usa la última copia guardada. La API (api/) nunca se guarda en caché.
  */
-const CACHE = 'daprintbox-v3';
+const CACHE = 'daprintbox-v4';
 const SHELL = [
   './', 'index.html', 'manifest.webmanifest', 'css/styles.css',
-  'js/config.js', 'js/calc.js', 'js/store.js', 'js/remote.js', 'js/app.js',
+  'js/config.js', 'js/calc.js', 'js/store.js', 'js/merge.js', 'js/remote.js', 'js/app.js',
   'img/cabecera.png', 'icons/icon-48.png', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/favicon-32.png',
 ];
 

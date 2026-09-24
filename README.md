@@ -33,7 +33,7 @@ Servida desde una web con HTTPS, Libreta Maker se puede instalar como una app (P
 
 ## Versión con servidor: cuentas de usuario y MySQL
 
-La app puede guardar los datos en una base de datos MySQL de tu servidor. **Cada usuario tiene su propia libreta privada**: entra con usuario y contraseña (se puede crear cuenta desde la app con un código de invitación) u, opcionalmente, con Google. Se sincroniza entre los dispositivos del mismo usuario, avisa si se guarda a la vez desde dos sitios y guarda un historial de versiones por usuario. La API funciona con PHP 5.6 o superior.
+La app puede guardar los datos en una base de datos MySQL de tu servidor. **Cada usuario tiene su propia libreta privada**: entra con usuario y contraseña (se puede crear cuenta desde la app con un código de invitación) u, opcionalmente, con Google. Funciona sin conexión (guarda cada cambio en el dispositivo y lo sube al volver internet), se sincroniza entre los dispositivos del mismo usuario combinando los cambios hechos a la vez (`js/merge.js`, con tests) y guarda un historial de versiones por usuario. La API funciona con PHP 5.6 o superior.
 
 ```bash
 npm run package   # crea dist/libreta-maker-servidor.zip listo para subir

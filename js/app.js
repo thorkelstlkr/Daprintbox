@@ -109,7 +109,12 @@
 
   // Modo servidor: los datos se guardan en MySQL a través de api/api.php (ver js/config.js)
   const remote = !!(window.Remote && window.Remote.enabled);
-  const sync = { ready: false, user: null, email: '', version: 0, pending: false, saving: false, error: '', updatedBy: '', updatedAt: '' };
+  const sync = {
+    ready: false, user: null, username: '', email: '', version: 0,
+    pending: false, saving: false, offline: false, error: '', updatedBy: '', updatedAt: '',
+    base: null,          // última versión confirmada por el servidor (para combinar cambios)
+    replaceAll: false,   // el próximo guardado sustituye la libreta entera (restaurar, cargar ejemplo…)
+  };
 
   // App instalable (PWA): solo cuando la página se sirve con manifiesto (versión web/servidor)
   const pwa = {
@@ -137,6 +142,7 @@
       sync.ready = true;
       render();
       queueSave(msg);
+      saveCache(); // primero en el dispositivo; el servidor se actualiza en cuanto hay conexión
       return;
     }
     if (!window.Store.save(S)) toast('No se pudo guardar en este navegador. Exporta una copia desde Ajustes.');
@@ -1387,6 +1393,7 @@
       ${remote ? `<div class="card">
         <h2>Tu cuenta</h2>
         <p class="small">Has entrado como <b>${esc(sync.user || '')}</b>${sync.email ? ` (${esc(sync.email)})` : ''}. Esta libreta es <b>solo tuya</b>: se guarda en el servidor y ningún otro usuario puede verla.</p>
+        <p class="small muted">Funciona también sin conexión: cada cambio se guarda al momento en este dispositivo y se sincroniza solo con el servidor en cuanto hay internet. Si cambias cosas en dos dispositivos a la vez, se combinan.</p>
         <p class="small muted">Versión ${fmtNum(sync.version)}${sync.updatedAt ? ` · último cambio el ${esc(fmtDateTime(sync.updatedAt))}` : ''}</p>
         <div class="filters">
           <button class="btn" data-action="history">Historial de versiones</button>
@@ -1498,6 +1505,7 @@
         try { data = JSON.parse(val(b, 'backup')); } catch (e) { data = null; }
         if (!data || !Array.isArray(data.filaments)) { toast('El texto no es una copia válida de Libreta Maker.'); return false; }
         S = window.Store.normalize(data);
+        sync.replaceAll = true;
         persist('Copia restaurada');
       },
     });
@@ -1597,6 +1605,40 @@
 
   let saveChain = Promise.resolve();
 
+  // Copia de la libreta en este dispositivo, por cuenta: permite trabajar sin conexión
+  const CACHE_PREFIX = 'libreta:cache:';
+  const LAST_USER = 'libreta:lastUser';
+  const clone = (o) => JSON.parse(JSON.stringify(o));
+
+  function saveCache() {
+    if (!remote || !sync.username || !sync.ready) return;
+    try {
+      localStorage.setItem(CACHE_PREFIX + sync.username, JSON.stringify({
+        user: sync.user, email: sync.email, version: sync.version, base: sync.base, state: S,
+        pending: sync.pending || sync.saving, replaceAll: sync.replaceAll, savedAt: Date.now(),
+      }));
+      localStorage.setItem(LAST_USER, sync.username);
+    } catch (e) { /* sin almacenamiento: solo se pierde el modo sin conexión */ }
+  }
+  function readCache(username) {
+    try { return username ? JSON.parse(localStorage.getItem(CACHE_PREFIX + username) || 'null') : null; } catch (e) { return null; }
+  }
+  function clearCache(username) {
+    try { localStorage.removeItem(CACHE_PREFIX + username); localStorage.removeItem(LAST_USER); } catch (e) { /* nada */ }
+  }
+  /** Carga la copia del dispositivo como estado de trabajo. */
+  function useCache(cache) {
+    S = window.Store.normalize(cache.state);
+    Object.assign(sync, {
+      version: cache.version || 0, base: cache.base || null, pending: !!cache.pending,
+      replaceAll: !!cache.replaceAll, ready: true,
+    });
+    if (!sync.user) Object.assign(sync, { user: cache.user, email: cache.email || '' });
+    $('.tabs').hidden = false;
+    render();
+    updateSyncBadge();
+  }
+
   /** Encola un guardado del estado actual; los guardados van de uno en uno. */
   function queueSave(msg) {
     sync.pending = true;
@@ -1605,50 +1647,64 @@
   }
 
   async function doSave(msg) {
-    if (!sync.pending || !sync.user) return;
+    if (!sync.pending || !sync.user || sync.saving) return;
     sync.pending = false;
     sync.saving = true;
     updateSyncBadge();
+    const snapshot = clone(S);
     try {
-      const r = await window.Remote.save(S, sync.version);
-      Object.assign(sync, { version: r.version, updatedBy: r.updated_by, updatedAt: r.updated_at, error: '' });
+      const r = await window.Remote.save(snapshot, sync.version);
+      Object.assign(sync, { version: r.version, updatedBy: r.updated_by, updatedAt: r.updated_at, error: '', offline: false, base: snapshot, replaceAll: false });
       if (msg) toast(msg);
     } catch (e) {
       if (e.status === 409 && e.data) {
-        // Otra persona guardó antes: se cargan sus datos para no pisarlos
-        applyRemote(e.data);
-        toast('Se guardaron cambios desde otro dispositivo justo antes: se han cargado. Repite tu último cambio.', 8000);
+        // Se guardó desde otro dispositivo: se combinan sus cambios con los de aquí y se vuelve a guardar
+        const theirs = window.Store.normalize(e.data.data || {});
+        if (!sync.replaceAll) S = window.Store.normalize(window.Merge.merge3(sync.base, S, theirs));
+        Object.assign(sync, { version: e.data.version, base: theirs, pending: true, error: '', offline: false });
+        if (!modal.open) render();
+        if (!sync.replaceAll) toast('Tus cambios se han combinado con los hechos en otro dispositivo.', 5000);
+        saveChain = saveChain.then(() => doSave(msg));
       } else if (e.status === 401) {
         Object.assign(sync, { pending: true, error: 'Sesión caducada' });
-        showLogin('Tu sesión ha caducado. Vuelve a entrar y se guardarán tus cambios.');
+        showLogin('Tu sesión ha caducado. Vuelve a entrar: tus cambios están guardados en este dispositivo y se sincronizarán.');
+      } else if (e.status === 0) {
+        Object.assign(sync, { pending: true, offline: true, error: '' }); // sin conexión: se reintentará solo
       } else {
         Object.assign(sync, { pending: true, error: e.message });
         toast(`No se pudo guardar en el servidor: ${e.message}`, 6000);
       }
     } finally {
       sync.saving = false;
+      saveCache();
       updateSyncBadge();
     }
   }
 
   function applyRemote(r) {
     S = window.Store.normalize(r.data || {});
-    Object.assign(sync, { version: r.version, updatedBy: r.updated_by || '', updatedAt: r.updated_at || '', pending: false, error: '' });
-    sync.ready = true;
+    Object.assign(sync, {
+      version: r.version, updatedBy: r.updated_by || '', updatedAt: r.updated_at || '',
+      pending: false, error: '', offline: false, base: clone(S), replaceAll: false, ready: true,
+    });
     render();
     updateSyncBadge();
+    saveCache();
   }
 
-  /** Comprueba si otra persona ha guardado cambios y, si es así, los carga. */
+  /** Sube los cambios pendientes o, si no hay, comprueba si otro dispositivo guardó algo. */
   async function pollRemote() {
-    if (!remote || !sync.ready || !sync.user || sync.pending || sync.saving || modal.open || document.hidden) return;
+    if (!remote || !sync.ready || !sync.user || sync.saving || modal.open || document.hidden) return;
+    if (sync.pending) { queueSave(); return; }
     try {
       const r = await window.Remote.load(sync.version);
+      if (sync.offline) { sync.offline = false; updateSyncBadge(); }
       if (r.unchanged || sync.pending || sync.saving || modal.open) return;
       applyRemote(r);
       toast('Libreta actualizada con los cambios hechos en otro dispositivo.', 4000);
     } catch (e) {
       if (e.status === 401) showLogin('Tu sesión ha caducado. Vuelve a entrar.');
+      else if (e.status === 0 && !sync.offline) { sync.offline = true; updateSyncBadge(); }
     }
   }
 
@@ -1663,7 +1719,12 @@
       $('.topbar').appendChild(el);
     }
     if (!sync.user) { el.innerHTML = ''; return; }
-    const [cls, label] = sync.saving ? ['saving', 'Guardando…'] : sync.pending ? ['error', sync.error ? 'Sin guardar' : 'Pendiente'] : ['ok', 'Guardado'];
+    const [cls, label] = sync.saving ? ['saving', 'Guardando…']
+      : sync.pending && sync.offline ? ['offline', 'Sin conexión · guardado en este dispositivo']
+      : sync.pending && sync.error ? ['error', 'Sin guardar']
+      : sync.pending ? ['saving', 'Pendiente']
+      : sync.offline ? ['offline', 'Sin conexión']
+      : ['ok', 'Guardado'];
     el.innerHTML = `<span class="dot ${cls}" aria-hidden="true"></span><span>${label}</span><span class="muted">· ${esc(sync.user)}</span>
       ${sync.pending && !sync.saving && sync.error ? '<button class="btn small" id="retry-save">Reintentar</button>' : ''}`;
     const retry = $('#retry-save');
@@ -1689,14 +1750,19 @@
   }
 
   async function afterLogin(r) {
-    sync.user = r.user;
-    sync.email = r.email || '';
+    const previous = sync.username;
+    Object.assign(sync, { user: r.user, email: r.email || '', username: r.username || r.user });
     $('.tabs').hidden = false;
-    if (sync.pending) {
+    const cache = readCache(sync.username);
+    if (sync.pending && previous === sync.username) {
       // había cambios sin guardar antes de caducar la sesión
       sync.ready = true;
       render();
       queueSave('Cambios guardados');
+    } else if (cache && cache.pending) {
+      // cambios hechos sin conexión en una sesión anterior de esta cuenta
+      useCache(cache);
+      queueSave('Cambios hechos sin conexión sincronizados');
     } else {
       await loadFromServer();
     }
@@ -1709,7 +1775,7 @@
     view.innerHTML = '<div class="empty">Cargando…</div>';
     if (!authConfig) {
       try { authConfig = await window.Remote.authConfig(); } catch (e) {
-        view.innerHTML = `<div class="card"><h2>No se pudo conectar con el servidor</h2><p class="small">${esc(e.message)}</p>
+        view.innerHTML = `<div class="card"><h2>No se pudo conectar con el servidor</h2><p class="small">${esc(e.message)}${e.status === 0 ? ' Cuando entres una vez con conexión, la app podrá abrirse también sin ella.' : ''}</p>
           <button class="btn primary" id="retry-connect">Reintentar</button></div>`;
         $('#retry-connect').addEventListener('click', () => showLogin(message));
         return;
@@ -1833,7 +1899,7 @@
       </div>
       <p class="small muted">¿Tienes tus datos en otro sitio (otro navegador o el enlace de Claude)? Allí, en Ajustes → «Copia en texto», cópialos y pégalos aquí.</p>
     </div>`;
-    const start = (state, msg) => { S = state; persist(msg); };
+    const start = (state, msg) => { S = state; sync.replaceAll = true; persist(msg); };
     $$('[data-first]', view).forEach((btn) => btn.addEventListener('click', () => {
       const kind = btn.dataset.first;
       if (kind === 'local') start({ ...local, demo: false }, 'Datos subidos al servidor');
@@ -1863,6 +1929,7 @@
             const h = await window.Remote.historyGet(btn.dataset.restore);
             askConfirm(`¿Restaurar la versión ${h.version} (${fmtDateTime(h.saved_at)}, ${h.saved_by})?\nSe guardará como una versión nueva; la actual seguirá en el historial.`, () => {
               S = window.Store.normalize(h.data);
+              sync.replaceAll = true;
               persist(`Versión ${h.version} restaurada`);
             }, 'Restaurar');
           } catch (e) { toast(e.message, 5000); }
@@ -1872,16 +1939,34 @@
     });
   }
 
+  /** Sin conexión al abrir la app: se trabaja con la copia del dispositivo de la última cuenta usada. */
+  function startOffline() {
+    let username = '';
+    try { username = localStorage.getItem(LAST_USER) || ''; } catch (e) { /* nada */ }
+    const cache = readCache(username);
+    if (!cache) return false;
+    Object.assign(sync, { user: cache.user, email: cache.email || '', username, offline: true });
+    useCache(cache);
+    toast('Sin conexión: trabajas con la copia de este dispositivo. Se sincronizará sola al volver la conexión.', 6000);
+    return true;
+  }
+
   async function startRemote() {
     view.innerHTML = '<div class="empty">Conectando con el servidor…</div>';
     updateSyncBadge();
     try {
       const me = await window.Remote.me();
-      sync.user = me.user;
-      sync.email = me.email || '';
+      Object.assign(sync, { user: me.user, email: me.email || '', username: me.username || me.user });
+      const cache = readCache(sync.username);
+      if (cache && cache.pending) {
+        useCache(cache);
+        queueSave('Cambios hechos sin conexión sincronizados');
+        return;
+      }
       await loadFromServer();
     } catch (e) {
       if (e.status === 401) { showLogin(); return; }
+      if (e.status === 0 && startOffline()) return;
       view.innerHTML = `<div class="card"><h2>No se pudo conectar con el servidor</h2><p class="small">${esc(e.message)}</p>
         <button class="btn primary" id="retry-connect">Reintentar</button></div>`;
       $('#retry-connect').addEventListener('click', startRemote);
@@ -1892,6 +1977,8 @@
     setInterval(pollRemote, 15000);
     document.addEventListener('visibilitychange', pollRemote);
     window.addEventListener('focus', pollRemote);
+    window.addEventListener('online', () => setTimeout(pollRemote, 500));
+    window.addEventListener('offline', () => { sync.offline = true; updateSyncBadge(); });
     modal.addEventListener('close', () => setTimeout(pollRemote, 300));
     window.addEventListener('beforeunload', (e) => {
       if (sync.pending || sync.saving) { e.preventDefault(); e.returnValue = ''; }
@@ -1932,7 +2019,8 @@
         if (!data || !Array.isArray(data.filaments)) throw new Error('formato');
         askConfirm('Esto reemplazará todos los datos actuales por los de la copia. ¿Continuar?', () => {
           S = window.Store.normalize(data);
-          persist('Copia importada');
+          sync.replaceAll = true;
+        persist('Copia importada');
         }, 'Importar');
       }).catch(() => toast('El archivo no es una copia válida de Libreta Maker.'));
       e.target.value = '';
@@ -2020,13 +2108,14 @@
     'export-csv': (id, el) => exportCSV(el.dataset.kind),
     'load-demo': () => {
       const hasData = S.printers.length || S.materials.length || S.components.length || S.filaments.length || S.prints.length || S.sales.length || S.expenses.length;
-      const load = () => { S = demoData(); persist('Datos de ejemplo cargados'); };
+      const load = () => { S = demoData(); sync.replaceAll = true; persist('Datos de ejemplo cargados'); };
       if (hasData && !S.demo) askConfirm('Los datos de ejemplo reemplazarán tus datos actuales. ¿Continuar?', load, 'Cargar ejemplo');
       else load();
     },
     'reset': () => {
       askConfirm('¿Borrar TODOS los datos? Esta acción no se puede deshacer (guarda una copia antes).', () => {
         S = window.Store.emptyState();
+        sync.replaceAll = true;
         persist('Datos borrados');
       }, 'Borrar todo');
     },
@@ -2034,6 +2123,7 @@
       askConfirm('Se borrarán los datos de ejemplo para que empieces con los tuyos.', () => {
         S = window.Store.emptyState();
         location.hash = 'dashboard';
+        sync.replaceAll = true;
         persist('Listo: empieza añadiendo tu impresora y tus filamentos');
       }, 'Empezar desde cero');
     },
@@ -2065,10 +2155,14 @@
       },
     }),
     'logout': async () => {
-      if (sync.pending || sync.saving) { toast('Espera a que se guarden los cambios antes de salir.', 4000); return; }
+      if (sync.pending || sync.saving) {
+        toast(sync.offline ? 'Tienes cambios sin sincronizar: conéctate a internet antes de cerrar sesión.' : 'Espera a que se guarden los cambios antes de salir.', 5000);
+        return;
+      }
+      clearCache(sync.username);
       try { await window.Remote.logout(); } catch (e) { /* la sesión ya no existe */ }
       if (window.google && window.google.accounts) window.google.accounts.id.disableAutoSelect();
-      Object.assign(sync, { user: null, email: '', ready: false, version: 0 });
+      Object.assign(sync, { user: null, username: '', email: '', ready: false, version: 0, base: null, offline: false });
       S = window.Store.emptyState();
       showLogin();
     },

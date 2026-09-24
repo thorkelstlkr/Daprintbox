@@ -121,9 +121,10 @@ Las actualizaciones llegan solas: cuando subas una versión nueva al servidor, l
 
 - **Cada usuario tiene su libreta**: en MySQL, la tabla `dpb_user_state` guarda una libreta por usuario y `dpb_history` su historial. El servidor comprueba en cada petición quién ha iniciado sesión y solo le deja leer y guardar la suya.
 - **Varios dispositivos**: puedes usar tu cuenta a la vez en el móvil y en el ordenador. Cada cambio se guarda al momento (arriba a la derecha verás **● Guardado · tu usuario**) y el otro dispositivo lo recibe solo en unos segundos.
-- Si guardas a la vez desde dos dispositivos, se queda el primero; en el segundo se cargan los datos nuevos y se avisa de que repitas el último cambio.
+- **Sin conexión**: la app funciona igual. Cada cambio se guarda al instante en el dispositivo (verás **Sin conexión · guardado en este dispositivo**) y se sube solo al servidor en cuanto vuelve internet. La app también se abre sin conexión con la última copia de tu libreta (hace falta haber entrado una vez con conexión en ese dispositivo).
+- **Cambios en dos dispositivos a la vez** (con o sin conexión): se **combinan**. Lo añadido en cada uno se conserva, las ediciones de registros distintos se mezclan, los borrados se aplican y el stock suma lo gastado en ambos (si en el móvil gastas 100 g de un filamento y en el PC 50 g, se descuentan 150 g). Si los dos cambiáis el mismo dato del mismo registro, se queda el del último dispositivo en sincronizar.
+- **Cerrar sesión** borra la copia de la libreta de ese dispositivo; si hay cambios sin subir, la app te pedirá conectarte antes.
 - **Historial de versiones** (*Ajustes → Tu cuenta*): cada guardado crea una versión (se guardan las últimas 200 de cada usuario). Si algo se borra por error, restaura una versión anterior.
-- Si se corta la conexión, verás **● Sin guardar** con un botón **Reintentar**; no cierres la pestaña hasta que ponga «Guardado».
 - La sesión dura 30 días en cada navegador.
 
 ## Opcional: entrar también con Google

@@ -283,6 +283,7 @@ textarea { resize: vertical; }
 .dot.ok { background: var(--good-mark); }
 .dot.saving { background: var(--warning); }
 .dot.error { background: var(--critical); }
+.dot.offline { background: var(--muted); box-shadow: 0 0 0 2px var(--warning) inset; }
 .login { max-width: 380px; margin: 40px auto; }
 .login h2 { margin-bottom: 4px; }
 @media (max-width: 640px) { .sync { margin-left: 0; } }
@@ -295,3 +296,4 @@ textarea { resize: vertical; }
 .login-tabs button { flex: 1; border: 0; background: none; color: var(--ink-2); font: inherit; padding: 8px; border-radius: 8px; cursor: pointer; }
 .login-tabs button[aria-selected="true"] { background: var(--surface); color: var(--ink); font-weight: 600; box-shadow: var(--shadow); }
 .login-legal { margin: 14px 0 0; text-align: center; }
+@media (max-width: 640px) { .sync { white-space: normal; } }
