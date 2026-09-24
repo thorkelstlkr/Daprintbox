@@ -1393,7 +1393,7 @@
           ${sync.email ? '' : '<button class="btn" data-action="change-password">Cambiar contraseña</button>'}
           <button class="btn" data-action="logout">Cerrar sesión</button>
         </div>
-        <p class="small muted" style="margin-bottom:0"><a href="condiciones.html" target="_blank" rel="noopener">Condiciones de servicio</a> · <a href="privacidad.html" target="_blank" rel="noopener">Política de privacidad</a> · Para borrar tu cuenta, escribe al administrador indicando tu usuario.</p>
+        <p class="small muted" style="margin-bottom:0"><a href="condiciones.html" target="_blank" rel="noopener">Condiciones de uso</a> · <a href="privacidad.html" target="_blank" rel="noopener">Privacidad</a> · Para borrar tu cuenta, escribe al administrador indicando tu usuario.</p>
       </div>` : ''}
 
       <div class="card">
@@ -1746,7 +1746,7 @@
         <button class="btn${withGoogle && !registering ? '' : ' primary'}" type="submit" style="margin-top:12px">${registering ? 'Crear cuenta y entrar' : 'Entrar'}</button>
       </form>` : ''}
       <p class="small neg" id="login-error" hidden></p>
-      <p class="small muted login-legal">${registering ? 'Al crear la cuenta aceptas las' : 'Consulta las'} <a href="condiciones.html" target="_blank" rel="noopener">condiciones de servicio</a> y la <a href="privacidad.html" target="_blank" rel="noopener">política de privacidad</a>.</p>
+      <p class="small muted login-legal">${registering ? 'Al crear la cuenta aceptas las' : 'Consulta las'} <a href="condiciones.html" target="_blank" rel="noopener">condiciones de uso</a> y la <a href="privacidad.html" target="_blank" rel="noopener">información de privacidad</a>.</p>
     </div>`;
     $$('[data-mode]', view).forEach((b) => b.addEventListener('click', () => showLogin('', b.dataset.mode)));
     const showError = (msg) => { const el = $('#login-error'); el.textContent = msg; el.hidden = false; };
