@@ -6,6 +6,13 @@
  */
 require __DIR__ . '/lib.php';
 
+// Muchos hostings guardan en caché los archivos PHP: se fuerza a leer el config.php recién editado
+$configFile = __DIR__ . '/config.php';
+if (function_exists('opcache_invalidate') && is_file($configFile)) {
+    @opcache_invalidate($configFile, true);
+}
+clearstatcache();
+
 header('Content-Type: text/html; charset=utf-8');
 header('Cache-Control: no-store');
 header('X-Frame-Options: DENY');
@@ -21,8 +28,18 @@ $legacy = null;
 $authorized = false;
 $methods = dpb_login_methods();
 
-if ($setupKey === '' || strpos($setupKey, 'cambia-esto') === 0) {
-    $errors[] = 'Primero pon una "setup_key" propia en api/config.php.';
+$exampleKey = 'cambia-esto-por-una-clave-larga-y-secreta';
+$keyProblem = '';
+if ($setupKey === '') {
+    $keyProblem = 'la línea «setup_key» está vacía o no existe';
+} elseif ($setupKey === $exampleKey) {
+    $keyProblem = 'la clave sigue siendo la de ejemplo («' . $exampleKey . '»)';
+} elseif (strlen($setupKey) < 8) {
+    $keyProblem = 'la clave es demasiado corta (mínimo 8 caracteres)';
+}
+if ($keyProblem !== '') {
+    $errors[] = 'Pon una «setup_key» propia en api/config.php: ' . $keyProblem . '.';
+    $errors[] = 'Archivo que se está leyendo: ' . $configFile . ' (guardado por última vez el ' . date('d/m/Y \a \l\a\s H:i:s', (int) @filemtime($configFile)) . '). Si no coincide con el que has editado, o la fecha no es la de tu último cambio, estás editando otro archivo.';
 } elseif (dpb_get($_SERVER, 'REQUEST_METHOD') === 'POST') {
     if (!hash_equals($setupKey, $key)) {
         usleep(500000);
@@ -38,7 +55,7 @@ if ($setupKey === '' || strpos($setupKey, 'cambia-esto') === 0) {
             $reg = (bool) dpb_get($config, 'allow_registration', false);
             $code = (string) dpb_get($config, 'registration_code', '');
             $checks[] = array(true, $reg ? ('Registro de cuentas nuevas: abierto' . ($code !== '' ? ' con código de invitación' : ' SIN código de invitación')) : 'Registro de cuentas nuevas: cerrado (solo tú creas usuarios aquí)', '');
-            if ($reg && strpos($code, 'cambia-') === 0) {
+            if ($reg && $code === 'cambia-este-codigo') {
                 $checks[] = array(false, 'Código de invitación', 'Cambia el registration_code de ejemplo de config.php por uno tuyo.');
             } elseif ($reg && $code === '') {
                 $checks[] = array(false, 'Código de invitación', 'Cualquiera que encuentre la web podría crearse una cuenta. Pon un registration_code en config.php y compártelo solo con quien quieras.');
