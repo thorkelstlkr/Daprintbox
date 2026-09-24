@@ -42,7 +42,7 @@ if ($setupKey === '') {
 } elseif (strlen($setupKey) < 8) {
     $keyProblem = 'la clave es demasiado corta (mínimo 8 caracteres)';
 }
-$openSetup = dpb_get($config, 'setup_sin_clave', false) === true;
+$openSetup = in_array(strtolower(trim(var_export(dpb_get($config, 'setup_sin_clave', false), true), "'\" ")), array('true', '1', 'si', 'sí', 'yes'), true);
 if ($openSetup) {
     // Vía alternativa: instalador abierto sin clave mientras config.php lo permita
     $keyProblem = '';
@@ -51,6 +51,14 @@ if ($openSetup) {
         $_SERVER['REQUEST_METHOD'] = 'POST';
     }
     $key = $setupKey;
+}
+// Líneas repetidas en config.php: PHP usa la última, lo que suele confundir
+$rawConfig = (string) @file_get_contents($configFile);
+foreach (array('setup_key', 'setup_sin_clave', 'db_name', 'db_user', 'db_pass') as $opt) {
+    $n = preg_match_all("/['\"]" . $opt . "['\"]\\s*=>/", $rawConfig, $m);
+    if ($n > 1) {
+        $errors[] = "En api/config.php la línea «{$opt}» aparece {$n} veces y PHP solo tiene en cuenta la ÚLTIMA. Deja una sola (borra las demás).";
+    }
 }
 if ($keyProblem !== '') {
     $errors[] = 'Pon una «setup_key» propia en api/config.php: ' . $keyProblem . '.';
@@ -178,7 +186,7 @@ function hidden_key($key)
 <body>
 <main>
   <h1>Instalación de Libreta Maker</h1>
-  <p class="muted">Versión del instalador: 2026-09-25</p>
+  <p class="muted">Versión del instalador: 2026-09-25b</p>
   <?php if (!empty($openSetup)): ?><p class="bad"><b>⚠ Instalador abierto sin clave</b> (<code>'setup_sin_clave' => true</code> en config.php). Cuando termines, cámbialo a <code>false</code> o borra esa línea: mientras esté así, cualquiera que conozca esta dirección podría gestionar los usuarios.</p><?php endif; ?>
   <?php foreach ($messages as $m): ?><p class="ok">✓ <?php echo h($m); ?></p><?php endforeach; ?>
   <?php foreach ($errors as $e): ?><p class="bad">⚠ <?php echo h($e); ?></p><?php endforeach; ?>

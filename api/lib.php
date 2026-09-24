@@ -25,7 +25,25 @@ function dpb_config()
         if (!is_file($file)) {
             dpb_fail(500, 'Falta api/config.php. Copia config.example.php como config.php y rellénalo.');
         }
-        $config = require $file;
+        // Se lee el archivo tal cual está ahora en el disco (y no con require) porque algunos hostings
+        // guardan en caché los PHP y seguirían usando una versión anterior de config.php.
+        $config = null;
+        $code = @file_get_contents($file);
+        if ($code !== false) {
+            try {
+                $config = @eval('?>' . $code);
+            } catch (Exception $e) {
+                $config = null;
+            } catch (Throwable $e) {
+                dpb_fail(500, 'api/config.php tiene un error de escritura cerca de la línea ' . $e->getLine() . ': revisa comillas, comas y paréntesis.');
+            }
+        }
+        if (!is_array($config)) {
+            $config = require $file;
+        }
+        if (!is_array($config)) {
+            dpb_fail(500, 'api/config.php no tiene el formato esperado: debe empezar por «<?php» y contener «return array( … );».');
+        }
     }
     return $config;
 }
