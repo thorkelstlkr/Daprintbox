@@ -1,4 +1,4 @@
-# Instalar Daprintbox en tu servidor (PHP + MySQL)
+# Instalar Libreta Maker en tu servidor (PHP + MySQL)
 
 Con esta instalación varias personas usan la app desde el navegador con **los mismos datos**, guardados en una base de datos MySQL de tu servidor. Cada persona entra con **su cuenta de Google** (o, si lo prefieres, con usuario y contraseña).
 
@@ -15,7 +15,7 @@ Con esta instalación varias personas usan la app desde el navegador con **los m
 
 En el panel de tu hosting (cPanel, Plesk, DirectAdmin…), en «Bases de datos MySQL»:
 
-1. Crea una base de datos, por ejemplo `daprintbox`.
+1. Crea una base de datos, por ejemplo `libreta_maker`.
 2. Crea un usuario de MySQL con una contraseña segura.
 3. Da a ese usuario **todos los privilegios** sobre la base de datos.
 
@@ -23,10 +23,10 @@ Apunta el nombre de la base de datos, el usuario, la contraseña y el servidor (
 
 ## 2. Crear el acceso con Google (unos 5 minutos, gratis)
 
-1. Entra en <https://console.cloud.google.com/> con tu cuenta de Google y crea un proyecto nuevo, por ejemplo «Daprintbox».
+1. Entra en <https://console.cloud.google.com/> con tu cuenta de Google y crea un proyecto nuevo, por ejemplo «Libreta Maker».
 2. Ve a **APIs y servicios → Pantalla de consentimiento de OAuth** (en la consola nueva se llama **Google Auth Platform**) y configúrala:
    - Tipo de usuario: **Externo**.
-   - Nombre de la aplicación: `Daprintbox`, y tu correo como correo de asistencia y de contacto.
+   - Nombre de la aplicación: `Libreta Maker`, y tu correo como correo de asistencia y de contacto.
    - En **Público / Usuarios de prueba**, añade los correos de Google de las personas que van a usar la app. (Otra opción es pulsar **Publicar aplicación**: al pedir solo nombre y correo, Google no exige revisión.)
 3. Ve a **Credenciales** (o **Clientes**) → **Crear credenciales → ID de cliente de OAuth**:
    - Tipo de aplicación: **Aplicación web**.
@@ -38,12 +38,14 @@ Apunta el nombre de la base de datos, el usuario, la contraseña y el servidor (
 
 ## 3. Subir los archivos
 
-Sube el contenido de `daprintbox-servidor.zip` a una carpeta de tu web, por ejemplo `public_html/daprintbox/`. Lo más fácil es subir el zip desde el administrador de archivos del panel y usar «Extraer».
+Sube el contenido de `libreta-maker-servidor.zip` a una carpeta de tu web, por ejemplo `public_html/libreta-maker/`. Lo más fácil es subir el zip desde el administrador de archivos del panel y usar «Extraer».
+
+> ¿Ya la tenías instalada en otra carpeta (por ejemplo `daprintbox/`)? No hace falta moverla: sube los archivos nuevos encima, conservando tu `api/config.php`. Los datos y las cuentas siguen igual.
 
 Debe quedar así:
 
 ```
-daprintbox/
+libreta-maker/
 ├── index.html
 ├── manifest.webmanifest   (datos de la app instalable)
 ├── sw.js                  (permite instalarla y abrirla sin conexión)
@@ -66,7 +68,7 @@ En la carpeta `api/`, **copia** `config.example.php` como `config.php` y edítal
 
 ```php
 'db_host' => 'localhost',
-'db_name' => 'daprintbox',              // tu base de datos
+'db_name' => 'libreta_maker',              // tu base de datos
 'db_user' => 'usuario_mysql',           // tu usuario de MySQL
 'db_pass' => 'contraseña_mysql',
 
@@ -87,7 +89,7 @@ En la carpeta `api/`, **copia** `config.example.php` como `config.php` y edítal
 
 ## 5. Comprobar el servidor y crear las tablas
 
-Abre en el navegador `https://tu-dominio/daprintbox/api/setup.php` y escribe tu `setup_key`. Verás una lista de comprobaciones:
+Abre en el navegador `https://tu-dominio/libreta-maker/api/setup.php` y escribe tu `setup_key`. Verás una lista de comprobaciones:
 
 - ✓ PHP, extensiones, HTTPS y conexión con Google.
 - ✓ ID de cliente y correos autorizados.
@@ -97,7 +99,7 @@ Si algo sale en rojo, debajo pone cómo arreglarlo. Cuando esté todo en verde, 
 
 ## 6. Entrar y pasar vuestros datos
 
-Abre `https://tu-dominio/daprintbox/`, pulsa **Iniciar sesión con Google** y, como la base de datos está vacía, elige cómo empezar:
+Abre `https://tu-dominio/libreta-maker/`, pulsa **Iniciar sesión con Google** y, como la base de datos está vacía, elige cómo empezar:
 
 - **Pegar una copia en texto**: en la versión que usabais hasta ahora (por ejemplo el enlace de Claude), ve a *Ajustes → Copia en texto → Copiar al portapapeles* y pégalo aquí.
 - **Subir los datos de este navegador**: si ya usabas la app en este mismo navegador y dirección.
@@ -105,7 +107,7 @@ Abre `https://tu-dominio/daprintbox/`, pulsa **Iniciar sesión con Google** y, c
 
 ## 7. Instalarla en el móvil (Android) como una app
 
-Daprintbox es una app instalable: se abre a pantalla completa, con su icono en la pantalla de inicio y en la lista de aplicaciones.
+Libreta Maker es una app instalable: se abre a pantalla completa, con su icono en la pantalla de inicio y en la lista de aplicaciones.
 
 - **Android (Chrome):** abre la dirección de la app, entra con tu cuenta y ve a *Ajustes → Instalar la app*. Si no aparece el botón, usa el menú **⋮** → **Instalar aplicación** (o **Añadir a pantalla de inicio**).
 - **iPhone (Safari):** botón **Compartir** → **Añadir a pantalla de inicio**.

@@ -1,6 +1,6 @@
 <?php
 /*
- * Funciones comunes de la API de Daprintbox.
+ * Funciones comunes de la API de Libreta Maker.
  * Compatible con PHP 5.6 y superiores.
  */
 

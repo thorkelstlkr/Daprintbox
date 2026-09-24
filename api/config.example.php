@@ -1,6 +1,6 @@
 <?php
 /*
- * Configuración de Daprintbox en el servidor.
+ * Configuración de Libreta Maker en el servidor.
  * Copia este archivo como "config.php" y rellena tus datos.
  * config.php nunca debe subirse a GitHub (está en .gitignore).
  */

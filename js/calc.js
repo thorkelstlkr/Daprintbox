@@ -1,5 +1,5 @@
 /*
- * Cálculos puros de Daprintbox (sin DOM ni almacenamiento).
+ * Cálculos puros de Libreta Maker (sin DOM ni almacenamiento).
  * Se carga en el navegador como script normal (window.Calc) y en Node con require().
  */
 (function (root) {

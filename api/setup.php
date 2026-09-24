@@ -1,6 +1,6 @@
 <?php
 /*
- * Instalador de Daprintbox: comprueba el servidor, crea las tablas en MySQL y gestiona
+ * Instalador de Libreta Maker: comprueba el servidor, crea las tablas en MySQL y gestiona
  * los usuarios con contraseña. Protegido por la "setup_key" de config.php.
  * Compatible con PHP 5.6 y superiores. Cuando termines, puedes borrar este archivo.
  */
@@ -86,7 +86,7 @@ function h($s)
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
-<title>Instalación de Daprintbox</title>
+<title>Instalación de Libreta Maker</title>
 <style>
   :root { color-scheme: light dark; --bg:#f9f9f7; --card:#fff; --ink:#111; --muted:#666; --line:#ddd; --accent:#2a78d6; --ok:#006300; --bad:#c62828; }
   @media (prefers-color-scheme: dark) { :root { --bg:#111; --card:#1b1b1a; --ink:#f3f3f3; --muted:#aaa; --line:#333; --accent:#3987e5; --ok:#3fbf3f; --bad:#ff6b6b; } }
@@ -105,7 +105,7 @@ function h($s)
 </head>
 <body>
 <main>
-  <h1>Instalación de Daprintbox</h1>
+  <h1>Instalación de Libreta Maker</h1>
   <?php foreach ($messages as $m): ?><p class="ok">✓ <?php echo h($m); ?></p><?php endforeach; ?>
   <?php foreach ($errors as $e): ?><p class="bad">⚠ <?php echo h($e); ?></p><?php endforeach; ?>
 

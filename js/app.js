@@ -1,5 +1,5 @@
 /*
- * Daprintbox — interfaz: vistas, formularios y gráfico.
+ * Libreta Maker — interfaz: vistas, formularios y gráfico.
  */
 (function () {
   'use strict';
@@ -127,7 +127,7 @@
     window.addEventListener('appinstalled', () => {
       pwa.prompt = null;
       pwa.installed = true;
-      toast('Daprintbox instalada');
+      toast('Libreta Maker instalada');
       if (currentView() === 'settings') render();
     });
   }
@@ -1368,8 +1368,8 @@
 
       ${pwa.supported ? `<div class="card">
         <h2>Instalar en el móvil o el ordenador</h2>
-        ${pwa.installed ? '<p class="small">✓ Estás usando Daprintbox como app instalada.</p>'
-          : pwa.prompt ? `<p class="small">Instala Daprintbox como una app: icono en la pantalla de inicio, pantalla completa y funciona sin conexión.</p>
+        ${pwa.installed ? '<p class="small">✓ Estás usando Libreta Maker como app instalada.</p>'
+          : pwa.prompt ? `<p class="small">Instala Libreta Maker como una app: icono en la pantalla de inicio, pantalla completa y funciona sin conexión.</p>
             <button class="btn primary" data-action="install-app">Instalar la app</button>`
           : `<p class="small">Para tenerla como una app con su icono:</p>
             <ul class="small" style="margin:0;padding-left:20px">
@@ -1472,7 +1472,7 @@
       rows = [['Nombre', 'Material', 'Color', 'Marca', 'Diámetro', 'Peso bobina (g)', 'Precio bobina', 'Stock (g)', 'Valor stock']];
       S.filaments.forEach((f) => rows.push([f.name, f.material, f.colorName, f.brand, f.diameter, num(f.spoolWeight), num(f.price), num(f.remaining), Math.max(0, num(f.remaining)) * costPerGram(f)]));
     }
-    download(`daprintbox-${kind}-${today()}.csv`, toCSV(rows), 'text/csv;charset=utf-8');
+    download(`libreta-maker-${kind}-${today()}.csv`, toCSV(rows), 'text/csv;charset=utf-8');
   }
 
   /** Copia de seguridad como texto: sirve donde las descargas están bloqueadas. */
@@ -1494,7 +1494,7 @@
       onSubmit: (b) => {
         let data;
         try { data = JSON.parse(val(b, 'backup')); } catch (e) { data = null; }
-        if (!data || !Array.isArray(data.filaments)) { toast('El texto no es una copia válida de Daprintbox.'); return false; }
+        if (!data || !Array.isArray(data.filaments)) { toast('El texto no es una copia válida de Libreta Maker.'); return false; }
         S = window.Store.normalize(data);
         persist('Copia restaurada');
       },
@@ -1716,7 +1716,7 @@
     const withGoogle = authConfig.methods.includes('google') && authConfig.google_client_id;
     const withPassword = authConfig.methods.includes('password');
     view.innerHTML = `<div class="card login">
-      <h1>Daprintbox</h1>
+      <h1>Libreta Maker</h1>
       <p class="small muted">Entra para ver y guardar los datos compartidos del taller.</p>
       ${message ? `<p class="small neg">${esc(message)}</p>` : ''}
       ${withGoogle ? '<div id="google-btn" class="google-btn"><span class="small muted">Cargando el acceso con Google…</span></div>' : ''}
@@ -1906,7 +1906,7 @@
           S = window.Store.normalize(data);
           persist('Copia importada');
         }, 'Importar');
-      }).catch(() => toast('El archivo no es una copia válida de Daprintbox.'));
+      }).catch(() => toast('El archivo no es una copia válida de Libreta Maker.'));
       e.target.value = '';
     });
   }
@@ -1987,7 +1987,7 @@
         persist('Gasto eliminado');
       });
     },
-    'export-json': () => download(`daprintbox-copia-${today()}.json`, JSON.stringify(S, null, 2), 'application/json'),
+    'export-json': () => download(`libreta-maker-copia-${today()}.json`, JSON.stringify(S, null, 2), 'application/json'),
     'import-json': () => $('#import-file').click(),
     'export-csv': (id, el) => exportCSV(el.dataset.kind),
     'load-demo': () => {

@@ -1,13 +1,13 @@
 /*
- * Prepara la carpeta para subir al servidor (PHP + MySQL): dist/daprintbox-servidor/
- * y, si hay `zip` disponible, dist/daprintbox-servidor.zip. Uso: npm run package
+ * Prepara la carpeta para subir al servidor (PHP + MySQL): dist/libreta-maker-servidor/
+ * y, si hay `zip` disponible, dist/libreta-maker-servidor.zip. Uso: npm run package
  */
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 
 const root = path.join(__dirname, '..');
-const out = path.join(root, 'dist', 'daprintbox-servidor');
+const out = path.join(root, 'dist', 'libreta-maker-servidor');
 fs.rmSync(out, { recursive: true, force: true });
 
 const copy = (rel) => {
@@ -30,7 +30,7 @@ fs.writeFileSync(path.join(out, 'js', 'config.js'), fs.readFileSync(path.join(ro
 let zipped = false;
 try {
   fs.rmSync(`${out}.zip`, { force: true });
-  execSync(`zip -qr ../daprintbox-servidor.zip .`, { cwd: out });
+  execSync(`zip -qr ../libreta-maker-servidor.zip .`, { cwd: out });
   zipped = true;
 } catch (e) { /* sin zip: se sube la carpeta */ }
-console.log(`dist/daprintbox-servidor/${zipped ? ' y dist/daprintbox-servidor.zip' : ''}`);
+console.log(`dist/libreta-maker-servidor/${zipped ? ' y dist/libreta-maker-servidor.zip' : ''}`);

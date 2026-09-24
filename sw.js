@@ -1,5 +1,5 @@
 /*
- * Service worker de Daprintbox: permite instalar la app y abrirla sin conexión.
+ * Service worker de Libreta Maker: permite instalar la app y abrirla sin conexión.
  * Estrategia «red primero»: con conexión siempre se usa la versión más reciente del servidor;
  * sin conexión se usa la última copia guardada. La API (api/) nunca se guarda en caché.
  */

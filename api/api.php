@@ -1,6 +1,6 @@
 <?php
 /*
- * API de Daprintbox: guarda los datos de la app en MySQL para compartirlos entre varias personas.
+ * API de Libreta Maker: guarda los datos de la app en MySQL para compartirlos entre varias personas.
  * Compatible con PHP 5.6 y superiores.
  *
  * Acciones (parámetro ?action=):

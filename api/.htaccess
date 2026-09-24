@@ -1,4 +1,4 @@
-# Daprintbox · protección de la carpeta de la API (Apache / LiteSpeed)
+# Libreta Maker · protección de la carpeta de la API (Apache / LiteSpeed)
 Options -Indexes
 
 # config.php (contraseñas) y lib.php nunca se sirven directamente

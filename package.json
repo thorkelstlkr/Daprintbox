@@ -1,5 +1,5 @@
 {
-  "name": "daprintbox",
+  "name": "libreta-maker",
   "version": "1.0.0",
   "private": true,
   "description": "Control de stock de filamentos 3D, costes de impresión y ventas",
