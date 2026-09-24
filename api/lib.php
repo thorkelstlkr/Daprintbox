@@ -195,6 +195,15 @@ function dpb_json($data, $status = 200)
 
 function dpb_fail($status, $message, $extra = array())
 {
+    if (defined('DPB_HTML_ERRORS')) {
+        http_response_code($status);
+        header('Content-Type: text/html; charset=utf-8');
+        echo '<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
+            . '<title>Instalación de Libreta Maker</title></head><body style="font:16px/1.5 system-ui,sans-serif;max-width:620px;margin:40px auto;padding:0 16px">'
+            . '<h1 style="font-size:1.3rem">Instalación de Libreta Maker</h1><p style="color:#c62828">⚠ ' . htmlspecialchars($message, ENT_QUOTES, 'UTF-8') . '</p>'
+            . '<p><a href="">Volver a intentarlo</a></p></body></html>';
+        exit;
+    }
     dpb_json(array('ok' => false, 'error' => $message) + $extra, $status);
 }
 

@@ -4,6 +4,7 @@
  * los usuarios (cada uno con su propia libreta). Protegido por la "setup_key" de config.php.
  * Compatible con PHP 5.6 y superiores. Cuando termines, puedes borrar este archivo.
  */
+define('DPB_HTML_ERRORS', true); // los errores del instalador se muestran como página, no como JSON
 require __DIR__ . '/lib.php';
 
 // Muchos hostings guardan en caché los archivos PHP: se fuerza a leer el config.php recién editado
@@ -20,6 +21,10 @@ header('X-Frame-Options: DENY');
 $config = dpb_config();
 $setupKey = trim((string) dpb_get($config, 'setup_key', ''));
 $key = trim((string) dpb_get($_POST, 'setup_key', ''));
+// Si config.php se guardó con otra codificación (ñ, tildes…), se pasa a UTF-8 antes de comparar
+if ($setupKey !== '' && function_exists('mb_check_encoding') && !mb_check_encoding($setupKey, 'UTF-8')) {
+    $setupKey = mb_convert_encoding($setupKey, 'UTF-8', 'ISO-8859-1');
+}
 $messages = array();
 $errors = array();
 $users = array();
@@ -45,7 +50,7 @@ if ($keyProblem !== '') {
         usleep(500000);
         $len = function ($t) { return function_exists('mb_strlen') ? mb_strlen($t, 'UTF-8') : strlen($t); };
         $errors[] = 'La clave de instalación no coincide con la «setup_key» de api/config.php. Has escrito ' . $len($key)
-            . ' caracteres y la de config.php tiene ' . $len($setupKey) . '. Lo más fácil: copia la clave de config.php (lo que hay entre las comillas) y pégala aquí. Distingue mayúsculas y minúsculas.';
+            . ' caracteres y la de config.php tiene ' . $len($setupKey) . '. Lo más fácil: copia la clave de config.php (lo que hay entre las comillas) y pégala aquí. Distingue mayúsculas y minúsculas. Si aun así no coincide, cambia la clave por una solo con letras sin tilde, números y guiones (sin ñ, tildes, comillas ni barras).';
     } else {
         $authorized = true;
 
