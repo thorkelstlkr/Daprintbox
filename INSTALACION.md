@@ -159,6 +159,7 @@ Además del historial, conviene hacer de vez en cuando una copia completa:
 | «El código de invitación no es correcto» | Debe coincidir exactamente con `registration_code` de `config.php`. |
 | «Ese nombre de usuario ya existe» | Elige otro nombre, o cámbiale la contraseña a ese usuario en `setup.php`. |
 | Alguien olvidó su contraseña | En `setup.php`, «Crear usuario o cambiar su contraseña» con su mismo nombre de usuario. |
+| setup.php dice que la clave no coincide aunque la copias de config.php | Pon `'setup_sin_clave' => true,` en `config.php`, termina la instalación y vuelve a ponerlo en `false`. |
 | «Demasiados intentos» | Tras 10 intentos fallidos desde la misma conexión hay que esperar 15 minutos. |
 | La app no pide usuario y guarda en el navegador | `js/config.js` debe tener `apiUrl: 'api/api.php'`. |
 | El botón de Google da error «origin_mismatch» | En Google Cloud, añade la dirección exacta de tu web en «Orígenes de JavaScript autorizados». |

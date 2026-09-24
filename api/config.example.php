@@ -39,6 +39,10 @@ return array(
     // Clave para usar setup.php (comprobar el servidor, tablas y usuarios). Pon una frase larga y secreta.
     'setup_key' => 'cambia-esto-por-una-clave-larga-y-secreta',
 
+    // Solo si setup.php no acepta tu clave: ponlo en true para abrirlo sin clave, termina la
+    // instalación y vuelve a ponerlo en false enseguida.
+    'setup_sin_clave' => false,
+
     // Cuántas versiones anteriores de cada libreta se guardan como copia de seguridad.
     'history_keep' => 200,
 

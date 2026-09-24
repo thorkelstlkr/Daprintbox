@@ -42,6 +42,16 @@ if ($setupKey === '') {
 } elseif (strlen($setupKey) < 8) {
     $keyProblem = 'la clave es demasiado corta (mínimo 8 caracteres)';
 }
+$openSetup = dpb_get($config, 'setup_sin_clave', false) === true;
+if ($openSetup) {
+    // Vía alternativa: instalador abierto sin clave mientras config.php lo permita
+    $keyProblem = '';
+    $setupKey = 'setup-sin-clave';
+    if (dpb_get($_SERVER, 'REQUEST_METHOD') !== 'POST') {
+        $_SERVER['REQUEST_METHOD'] = 'POST';
+    }
+    $key = $setupKey;
+}
 if ($keyProblem !== '') {
     $errors[] = 'Pon una «setup_key» propia en api/config.php: ' . $keyProblem . '.';
     $errors[] = 'Archivo que se está leyendo: ' . $configFile . ' (guardado por última vez el ' . date('d/m/Y \a \l\a\s H:i:s', (int) @filemtime($configFile)) . '). Si no coincide con el que has editado, o la fecha no es la de tu último cambio, estás editando otro archivo.';
@@ -168,6 +178,8 @@ function hidden_key($key)
 <body>
 <main>
   <h1>Instalación de Libreta Maker</h1>
+  <p class="muted">Versión del instalador: 2026-09-25</p>
+  <?php if (!empty($openSetup)): ?><p class="bad"><b>⚠ Instalador abierto sin clave</b> (<code>'setup_sin_clave' => true</code> en config.php). Cuando termines, cámbialo a <code>false</code> o borra esa línea: mientras esté así, cualquiera que conozca esta dirección podría gestionar los usuarios.</p><?php endif; ?>
   <?php foreach ($messages as $m): ?><p class="ok">✓ <?php echo h($m); ?></p><?php endforeach; ?>
   <?php foreach ($errors as $e): ?><p class="bad">⚠ <?php echo h($e); ?></p><?php endforeach; ?>
 
