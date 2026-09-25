@@ -140,3 +140,9 @@ test('resultados por tipo de trabajo', () => {
   assert.deepEqual(k['3d'], { jobs: 1, units: 1, revenue: 5, profit: 4 });
   assert.equal(k.otros.revenue, 7);
 });
+
+test('resina medida en ml: coste por ml del envase', () => {
+  const resina = { r: { id: 'r', price: 30, spoolWeight: 1000, unit: 'ml', kind: 'resina' } }; // 1 L a 30 €
+  const c = Calc.printCost({ items: [{ filamentId: 'r', grams: 85 }], hours: 0, quantity: 12 }, resina, settings);
+  close(c.material, 85 * 0.03); // 85 ml × 0,03 €/ml
+});

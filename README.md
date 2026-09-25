@@ -2,7 +2,7 @@
 
 Aplicación web para gestionar un pequeño taller de **impresión 3D, corte y grabado láser y sellos personalizados**:
 
-- **Filamentos** — stock de cada bobina (material, color, marca, precio, gramos restantes), aviso de stock bajo, reposiciones y valor del inventario.
+- **Filamento y resina** — bobinas de filamento (FDM, en gramos) y envases de resina (SLA/MSLA, en ml o g): material, color, marca, precio, cantidad restante, aviso de stock bajo, reposiciones y valor del inventario.
 - **Materiales en plancha** — madera, contrachapado, MDF, metacrilato, cuero, fotopolímero y fotolito para sellos… con medidas de plancha, coste por cm², stock en planchas y reposiciones.
 - **Componentes** — piezas externas (portalámparas, tiras LED, imanes, anillas…) con precio por paquete, coste por unidad, stock, aviso de stock bajo y reposiciones.
 - **Máquinas** — impresoras 3D, láser e insoladora UV para sellos, cada una con su consumo, precio, vida útil y mantenimiento. Muestra su coste por hora, horas de uso, trabajos, ingresos y beneficio generado.
@@ -45,7 +45,7 @@ Los pasos (base de datos, subir archivos, `api/config.php`, `api/setup.php` para
 
 | Concepto | Fórmula |
 |---|---|
-| Filamento (3D) | gramos × (precio bobina ÷ peso bobina) |
+| Filamento o resina (3D) | cantidad (g o ml, según el laminador) × (precio de la bobina o envase ÷ su contenido) |
 | Plancha (láser, sellos) | ancho × alto de cada pieza (cm²) × piezas × (1 + % desperdicio) × (precio plancha ÷ área plancha) |
 | Electricidad | horas × (W de la impresora ÷ 1000) × precio kWh |
 | Máquina | horas × (precio de la impresora ÷ vida útil + mantenimiento/h) |
