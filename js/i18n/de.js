@@ -583,5 +583,8 @@
     "El token ha caducado. Vuelve a intentarlo.": "Das Token ist abgelaufen. Versuche es erneut.",
     "La cuenta de Google no tiene un correo verificado.": "Das Google-Konto hat keine bestätigte E-Mail-Adresse.",
     "El servidor no pudo descargar las claves de Google (revisa que pueda conectarse a internet).": "Der Server konnte die Google-Schlüssel nicht herunterladen (prüfe, ob er ins Internet kommt).",
+    "Enlace al archivo": "Link zur Datei",
+    "De dónde sacaste el archivo: Printables, Thingiverse, MakerWorld, Cults…": "Woher die Datei stammt: Printables, Thingiverse, MakerWorld, Cults…",
+    "Abrir el archivo en {site}": "Datei auf {site} öffnen",
   };
 })(typeof window !== 'undefined' ? window : globalThis);

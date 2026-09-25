@@ -583,5 +583,8 @@
     "El token ha caducado. Vuelve a intentarlo.": "Le jeton a expiré. Réessayez.",
     "La cuenta de Google no tiene un correo verificado.": "Le compte Google n'a pas d'adresse e-mail vérifiée.",
     "El servidor no pudo descargar las claves de Google (revisa que pueda conectarse a internet).": "Le serveur n'a pas pu télécharger les clés de Google (vérifiez qu'il peut se connecter à internet).",
+    "Enlace al archivo": "Lien vers le fichier",
+    "De dónde sacaste el archivo: Printables, Thingiverse, MakerWorld, Cults…": "D'où vient le fichier : Printables, Thingiverse, MakerWorld, Cults…",
+    "Abrir el archivo en {site}": "Ouvrir le fichier sur {site}",
   };
 })(typeof window !== 'undefined' ? window : globalThis);

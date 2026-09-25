@@ -968,7 +968,7 @@
             const s = num(sold[p.id]);
             return `<tr>
               <td class="nowrap">${fmtDate(p.date)}</td>
-              <td><span class="badge kind-${k}">${t(KIND_SHORT[k])}</span> <b>${esc(p.name)}</b><div class="small muted">${esc([p.printerName, (p.items || []).map((it) => it.filamentName).join(', '), (p.sheets || []).map((it) => it.materialName).join(', '), (p.components || []).map((it) => `${fmtNum(it.qty, 2)}× ${it.componentName}`).join(', ')].filter(Boolean).join(' · '))}</div></td>
+              <td><span class="badge kind-${k}">${t(KIND_SHORT[k])}</span> <b>${esc(p.name)}</b>${fileLink(p.fileUrl)}<div class="small muted">${esc([p.printerName, (p.items || []).map((it) => it.filamentName).join(', '), (p.sheets || []).map((it) => it.materialName).join(', '), (p.components || []).map((it) => `${fmtNum(it.qty, 2)}× ${it.componentName}`).join(', ')].filter(Boolean).join(' · '))}</div></td>
               <td class="num">${fmtNum(p.quantity)}</td>
               <td class="num">${[g ? fmtGrams(g) : '', ml ? fmtMl(ml) : '', cm2 ? fmtNum(cm2) + ' cm²' : ''].filter(Boolean).join('<br>') || '—'}</td>
               <td class="num">${fmtHours(p.hours)}</td>
@@ -985,6 +985,21 @@
         </table></div>` : `<div class="empty">${S.prints.length ? t('No hay trabajos de este tipo.') : t('Registra tu primer trabajo para calcular su coste y descontar el material usado.')}</div>`}
       </div>
       <p class="small muted">${t('El coste incluye material (filamento o plancha con un {waste} % de desperdicio), componentes, electricidad ({kwh}/kWh), amortización y mantenimiento de la máquina, mano de obra, extras y un {fail} % por fallos. Cámbialo en Máquinas y Ajustes.', { waste: fmtNum(S.settings.sheetWaste), kwh: money(S.settings.kwhPrice), fail: fmtNum(S.settings.failureRate) })}</p>`;
+  }
+
+  // Enlace al archivo del trabajo (Printables, Thingiverse…): solo se enlazan direcciones http(s)
+  function normalizeUrl(u) {
+    u = String(u || '').trim();
+    if (u && !/^[a-z][a-z0-9+.-]*:/i.test(u)) u = 'https://' + u;
+    return u;
+  }
+  function fileLink(u) {
+    if (!u) return '';
+    let url;
+    try { url = new URL(u); } catch (e) { return ''; }
+    if (!/^https?:$/.test(url.protocol)) return '';
+    const site = url.hostname.replace(/^www\./, '');
+    return ` <a class="file-link" href="${esc(url.href)}" target="_blank" rel="noopener noreferrer" title="${esc(t('Abrir el archivo en {site}', { site }))}">🔗 ${esc(site)}</a>`;
   }
 
   function filamentOptions(selected) {
@@ -1051,6 +1066,7 @@
       submitLabel: quoteOnly ? t('Guardar como trabajo') : t('Guardar'),
       body: `<div class="form-grid">
           ${field(t('Pieza / encargo *'), inp('name', p.name, `required placeholder="${t('Ej. Soporte móvil, Sello logo, Posavasos…')}"`), { wide: true })}
+          ${field(t('Enlace al archivo'), inp('fileUrl', p.fileUrl, 'type="url" inputmode="url" autocapitalize="none" spellcheck="false" placeholder="https://www.printables.com/model/…"'), { wide: true, hint: t('De dónde sacaste el archivo: Printables, Thingiverse, MakerWorld, Cults…') })}
           ${field(t('Tipo de trabajo'), `<select name="kind">${Object.entries(KINDS).map(([k, v]) => `<option value="${k}"${k === (p.kind || '3d') ? ' selected' : ''}>${t(v)}</option>`).join('')}</select>`)}
           ${printerField}
           ${field(t('Fecha'), `<input type="date" name="date" value="${esc(p.date)}">`)}
@@ -1219,7 +1235,7 @@
         if (!job.items.length && !job.sheets.length && !job.components.length && !job.hours) { toast(t('Indica el material usado o el tiempo de máquina.')); return false; }
         const pr = findPrinter(job.printerId);
         const cost = printCost(job, filamentsById(), S.settings, pr, componentsById(), materialsById());
-        const data = { ...job, printerName: pr ? pr.name : '', name: val(b, 'name'), date: val(b, 'date') || today(), notes: val(b, 'notes'), cost };
+        const data = { ...job, printerName: pr ? pr.name : '', name: val(b, 'name'), fileUrl: normalizeUrl(val(b, 'fileUrl')), date: val(b, 'date') || today(), notes: val(b, 'notes'), cost };
         if (isNew) {
           const deduct = checked(b, 'deduct');
           if (deduct) applyJobStock(data, -1);

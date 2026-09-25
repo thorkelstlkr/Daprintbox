@@ -583,5 +583,8 @@
     "El token ha caducado. Vuelve a intentarlo.": "El testimoni ha caducat. Torna-ho a provar.",
     "La cuenta de Google no tiene un correo verificado.": "El compte de Google no té un correu verificat.",
     "El servidor no pudo descargar las claves de Google (revisa que pueda conectarse a internet).": "El servidor no ha pogut baixar les claus de Google (revisa que es pugui connectar a internet).",
+    "Enlace al archivo": "Enllaç al fitxer",
+    "De dónde sacaste el archivo: Printables, Thingiverse, MakerWorld, Cults…": "D'on vas treure el fitxer: Printables, Thingiverse, MakerWorld, Cults…",
+    "Abrir el archivo en {site}": "Obre el fitxer a {site}",
   };
 })(typeof window !== 'undefined' ? window : globalThis);

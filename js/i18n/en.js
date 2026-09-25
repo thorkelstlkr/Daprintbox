@@ -583,5 +583,8 @@
     "El token ha caducado. Vuelve a intentarlo.": "The token has expired. Try again.",
     "La cuenta de Google no tiene un correo verificado.": "The Google account has no verified email.",
     "El servidor no pudo descargar las claves de Google (revisa que pueda conectarse a internet).": "The server couldn't download Google's keys (check it can connect to the internet).",
+    "Enlace al archivo": "Link to the file",
+    "De dónde sacaste el archivo: Printables, Thingiverse, MakerWorld, Cults…": "Where you got the file: Printables, Thingiverse, MakerWorld, Cults…",
+    "Abrir el archivo en {site}": "Open the file on {site}",
   };
 })(typeof window !== 'undefined' ? window : globalThis);
