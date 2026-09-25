@@ -6,6 +6,8 @@
 
   const { num, printCost, costPerGram, gramsByFilament, soldByPrint, saleTotals, summary, lastMonths, monthlySeries } = window.Calc;
   const { uid, today } = window.Store;
+  const { t, N_ } = window.I18n;
+  const LOC = () => window.I18n.locale();
 
   let S = window.Store.load();
   const ui = { kind: 'all', period: 'month', salesPeriod: 'all', expensesPeriod: 'all', filamentQuery: '' };
@@ -20,13 +22,13 @@
 
   function money(v) {
     try {
-      return new Intl.NumberFormat('es-ES', { style: 'currency', currency: S.settings.currency || 'EUR' }).format(num(v));
+      return new Intl.NumberFormat(LOC(), { style: 'currency', currency: S.settings.currency || 'EUR' }).format(num(v));
     } catch (e) {
       return num(v).toFixed(2) + ' ' + (S.settings.currency || '');
     }
   }
   const moneySigned = (v) => `<span class="${v < 0 ? 'neg' : v > 0 ? 'pos' : ''}">${money(v)}</span>`;
-  const fmtNum = (v, d = 0) => new Intl.NumberFormat('es-ES', { maximumFractionDigits: d, minimumFractionDigits: 0 }).format(num(v));
+  const fmtNum = (v, d = 0) => new Intl.NumberFormat(LOC(), { maximumFractionDigits: d, minimumFractionDigits: 0 }).format(num(v));
   const fmtGrams = (g) => (Math.abs(num(g)) >= 1000 ? fmtNum(num(g) / 1000, 2) + ' kg' : fmtNum(g) + ' g');
   const fmtMl = (ml) => (Math.abs(num(ml)) >= 1000 ? fmtNum(num(ml) / 1000, 2) + ' L' : fmtNum(ml) + ' ml');
   // Filamento (FDM) o resina: la resina suele medirse en ml (es lo que da el laminador)
@@ -34,19 +36,18 @@
   const unitOf = (f) => (f && f.unit) || (isResin(f) ? 'ml' : 'g');
   const fmtAmount = (q, unit) => (unit === 'ml' ? fmtMl(q) : fmtGrams(q));
   const fmtStock = (f) => fmtAmount(f.remaining, unitOf(f));
-  const containerOf = (f) => (isResin(f) ? 'envase' : 'bobina');
   const fmtDateTime = (dt) => {
     const d = new Date(String(dt).replace(' ', 'T'));
-    return isNaN(d) ? String(dt) : d.toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+    return isNaN(d) ? String(dt) : d.toLocaleString(LOC(), { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
   };
-  const fmtDate = (d) => (d ? new Date(d + 'T00:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' }) : '');
+  const fmtDate = (d) => (d ? new Date(d + 'T00:00:00').toLocaleDateString(LOC(), { day: '2-digit', month: 'short', year: 'numeric' }) : '');
   const fmtHours = (h) => {
     const total = Math.round(num(h) * 60);
     return `${Math.floor(total / 60)} h ${String(total % 60).padStart(2, '0')} min`;
   };
   const monthLabel = (ym, withYear) => {
     const d = new Date(ym + '-01T00:00:00');
-    return d.toLocaleDateString('es-ES', withYear ? { month: 'short', year: 'numeric' } : { month: 'short' }).replace('.', '');
+    return d.toLocaleDateString(LOC(), withYear ? { month: 'short', year: 'numeric' } : { month: 'short' }).replace('.', '');
   };
 
   const filamentsById = () => Object.fromEntries(S.filaments.map((f) => [f.id, f]));
@@ -55,24 +56,27 @@
   const materialsById = () => Object.fromEntries(S.materials.map((m) => [m.id, m]));
   const { sheetCostPerCm2, sheetsUsed } = window.Calc;
   const matLow = (m) => num(m.stock) <= (m.lowStock === '' || m.lowStock == null ? 0 : num(m.lowStock));
-  const fmtSheets = (n) => `${fmtNum(n, 2)} ${Math.abs(num(n) - 1) < 1e-9 ? 'plancha' : 'planchas'}`;
+  const fmtSheets = (n) => (Math.abs(num(n) - 1) < 1e-9 ? t('{n} plancha', { n: fmtNum(n, 2) }) : t('{n} planchas', { n: fmtNum(n, 2) }));
   const materialLabel = (m) => `${m.name}${m.thickness ? ' ' + fmtNum(m.thickness, 1) + ' mm' : ''}`;
 
   // Tipos de trabajo y de máquina
-  const KINDS = { '3d': 'Impresión 3D', laser: 'Corte y grabado láser', sello: 'Sello personalizado' };
-  const KIND_SHORT = { '3d': '3D', laser: 'Láser', sello: 'Sello', otros: 'Otras ventas' };
-  const MACHINE_TYPES = { '3d': 'Impresora 3D FDM', resina: 'Impresora 3D de resina', laser: 'Láser', insoladora: 'Insoladora', otra: 'Otra' };
+  // (en español; se traducen al mostrarlos con t())
+  const KINDS = { '3d': N_('Impresión 3D'), laser: N_('Corte y grabado láser'), sello: N_('Sello personalizado') };
+  const KIND_SHORT = { '3d': '3D', laser: N_('Láser'), sello: N_('Sello'), otros: N_('Otras ventas') };
+  const MACHINE_TYPES = { '3d': N_('Impresora 3D FDM'), resina: N_('Impresora 3D de resina'), laser: N_('Láser'), insoladora: N_('Insoladora'), otra: N_('Otra') };
   const machineType = (m) => (m && m.type) || '3d';
   const machineForKind = (kind) => ({ '3d': '3d', laser: 'laser', sello: 'insoladora' }[kind] || '3d');
   const kindForMachine = (m) => ({ laser: 'laser', insoladora: 'sello' }[machineType(m)] || '3d');
   /** ¿Sirve esta máquina para este tipo de trabajo? (la impresión 3D admite FDM y resina) */
   const machineFits = (m, kind) => !!m && (kind === '3d' ? ['3d', 'resina'].includes(machineType(m)) : machineType(m) === machineForKind(kind));
   // Materiales típicos de un sello de fotopolímero: la plancha y el negativo (fotolito)
-  const isPhotopolymer = (m) => /fotopol/i.test(`${m.category} ${m.name}`);
-  const isNegative = (m) => /fotolito|negativo|acetato/i.test(`${m.category} ${m.name}`);
+  const isPhotopolymer = (m) => /fotopol|photopol/i.test(`${m.category} ${m.name}`);
+  const isNegative = (m) => /fotolit|negati|n[ée]gatif|acetat|ac[ée]tate|film|pellicola|typon/i.test(`${m.category} ${m.name}`);
   const { componentUnitCost, componentsUsed } = window.Calc;
   const compLow = (c) => num(c.stock) <= (c.lowStock === '' || c.lowStock == null ? 0 : num(c.lowStock));
-  const fmtQty = (q, unit) => `${fmtNum(q, 2)} ${unit || 'ud.'}`;
+  // «ud.» es la unidad por defecto guardada en los datos; se muestra traducida
+  const unitLabel = (u) => (!u || u === 'ud.' ? t('ud.') : u);
+  const fmtQty = (q, unit) => `${fmtNum(q, 2)} ${unitLabel(unit)}`;
   const defaultPrinter = () => findPrinter(S.settings.defaultPrinterId) || S.printers[0];
   const printerHourCost = (pr) => window.Calc.printerHourCost(S.settings, pr);
   const filamentLabel = (f) => `${f.name}${f.material ? ' · ' + f.material : ''}`;
@@ -82,16 +86,16 @@
   // ---------------------------------------------------------------- periodos
 
   const PERIODS = {
-    month: 'Este mes',
-    prevMonth: 'Mes anterior',
-    year: 'Este año',
-    last12: 'Últimos 12 meses',
-    all: 'Todo',
+    month: N_('Este mes'),
+    prevMonth: N_('Mes anterior'),
+    year: N_('Este año'),
+    last12: N_('Últimos 12 meses'),
+    all: N_('Todo'),
   };
 
   function periodRange(key) {
-    const t = today();
-    const [y, m] = t.split('-').map(Number);
+    const td = today();
+    const [y, m] = td.split('-').map(Number);
     const pad = (n) => String(n).padStart(2, '0');
     const lastDay = (yy, mm) => new Date(yy, mm, 0).getDate();
     switch (key) {
@@ -102,7 +106,7 @@
         return [`${py}-${pad(pm)}-01`, `${py}-${pad(pm)}-${lastDay(py, pm)}`];
       }
       case 'year': return [`${y}-01-01`, `${y}-12-31`];
-      case 'last12': return [lastMonths(t.slice(0, 7), 12)[0] + '-01', t];
+      case 'last12': return [lastMonths(td.slice(0, 7), 12)[0] + '-01', td];
       default: return [null, null];
     }
   }
@@ -111,8 +115,8 @@
     return (!from || date >= from) && (!to || date <= to);
   };
   const periodSelect = (name, value) =>
-    `<select data-period="${name}" aria-label="Periodo">${Object.entries(PERIODS)
-      .map(([k, v]) => `<option value="${k}"${k === value ? ' selected' : ''}>${v}</option>`).join('')}</select>`;
+    `<select data-period="${name}" aria-label="${t('Periodo')}">${Object.entries(PERIODS)
+      .map(([k, v]) => `<option value="${k}"${k === value ? ' selected' : ''}>${t(v)}</option>`).join('')}</select>`;
 
   // ---------------------------------------------------------------- persistencia
 
@@ -141,7 +145,7 @@
     window.addEventListener('appinstalled', () => {
       pwa.prompt = null;
       pwa.installed = true;
-      toast('Libreta Maker instalada');
+      toast(t('Libreta Maker instalada'));
       if (currentView() === 'settings') render();
     });
   }
@@ -154,7 +158,7 @@
       saveCache(); // primero en el dispositivo; el servidor se actualiza en cuanto hay conexión
       return;
     }
-    if (!window.Store.save(S)) toast('No se pudo guardar en este navegador. Exporta una copia desde Ajustes.');
+    if (!window.Store.save(S)) toast(t('No se pudo guardar en este navegador. Exporta una copia desde Ajustes.'));
     else if (msg) toast(msg);
     render();
   }
@@ -204,7 +208,7 @@
   const modal = $('#modal');
   let modalSubmit = null;
 
-  function openModal({ title, body, submitLabel = 'Guardar', onOpen, onSubmit, hideCancel = false }) {
+  function openModal({ title, body, submitLabel = t('Guardar'), onOpen, onSubmit, hideCancel = false }) {
     $('#modal-title').textContent = title;
     // cuerpo nuevo en cada apertura para no acumular listeners de formularios anteriores
     const old = $('#modal-body');
@@ -226,7 +230,7 @@
     const invalid = $$('[required]', body).find((el) => !String(el.value).trim());
     if (invalid) {
       invalid.focus();
-      toast('Completa los campos obligatorios.');
+      toast(t('Completa los campos obligatorios.'));
       return;
     }
     if (modalSubmit && modalSubmit(body) === false) return;
@@ -235,9 +239,9 @@
   $$('[data-close]', modal).forEach((b) => b.addEventListener('click', () => modal.close()));
 
   /** Confirmación dentro de la página (no depende de window.confirm, que algunos visores bloquean). */
-  function askConfirm(message, onYes, yesLabel = 'Eliminar') {
+  function askConfirm(message, onYes, yesLabel = t('Eliminar')) {
     openModal({
-      title: 'Confirmar',
+      title: t('Confirmar'),
       submitLabel: yesLabel,
       body: message.split('\n').map((line) => `<p>${esc(line)}</p>`).join(''),
       onSubmit: () => { onYes(); },
@@ -273,12 +277,12 @@
     // Rentabilidad por pieza (en el periodo)
     const byPiece = {};
     S.sales.filter((s) => (!from || s.date >= from) && (!to || s.date <= to)).forEach((s) => {
-      const key = s.description || 'Sin nombre';
-      const t = saleTotals(s);
+      const key = s.description || t('Sin nombre');
+      const tt = saleTotals(s);
       byPiece[key] = byPiece[key] || { name: key, units: 0, revenue: 0, profit: 0 };
       byPiece[key].units += num(s.quantity);
-      byPiece[key].revenue += t.revenue;
-      byPiece[key].profit += t.profit;
+      byPiece[key].revenue += tt.revenue;
+      byPiece[key].profit += tt.profit;
     });
     const top = Object.values(byPiece).sort((a, b) => b.profit - a.profit).slice(0, 6);
 
@@ -293,76 +297,76 @@
 
     return `
       <div class="page-head">
-        <h1>Resumen</h1>
+        <h1>${t('Resumen')}</h1>
         <div class="filters">${periodSelect('period', ui.period)}</div>
       </div>
-      ${empty ? `<div class="card"><h2>Bienvenido 👋</h2>
-        <p>Empieza añadiendo tus <b>máquinas</b> (impresoras 3D, láser, insoladora) y tus <b>materiales</b> (filamento, planchas, componentes), registra cada <b>trabajo</b> —impresión 3D, corte o grabado láser, sello— para calcular su coste y descontar el material, y apunta tus <b>ventas</b> para ver tu beneficio real.</p>
-        <div class="filters"><button class="btn primary" data-action="new-printer">Añadir máquina</button>
-        <button class="btn" data-action="new-filament">Añadir filamento</button>
-        <button class="btn" data-action="load-demo">Cargar datos de ejemplo</button></div></div>` : ''}
+      ${empty ? `<div class="card"><h2>${t('Bienvenido 👋')}</h2>
+        <p>${t('Empieza añadiendo tus <b>máquinas</b> (impresoras 3D, láser, insoladora) y tus <b>materiales</b> (filamento, planchas, componentes), registra cada <b>trabajo</b> —impresión 3D, corte o grabado láser, sello— para calcular su coste y descontar el material, y apunta tus <b>ventas</b> para ver tu beneficio real.')}</p>
+        <div class="filters"><button class="btn primary" data-action="new-printer">${t('Añadir máquina')}</button>
+        <button class="btn" data-action="new-filament">${t('Añadir filamento')}</button>
+        <button class="btn" data-action="load-demo">${t('Cargar datos de ejemplo')}</button></div></div>` : ''}
       <div class="kpis">
-        <div class="kpi"><div class="label">Ingresos por ventas</div><div class="value">${money(r.revenue)}</div>
-          <div class="sub">${r.salesCount} ${r.salesCount === 1 ? 'venta' : 'ventas'} · ${fmtNum(r.units)} uds.</div></div>
-        <div class="kpi"><div class="label">Beneficio de las ventas</div><div class="value">${moneySigned(r.salesProfit)}</div>
-          <div class="sub">Margen ${fmtNum(r.marginPct, 1)} % · tras coste y comisiones</div></div>
-        <div class="kpi"><div class="label">Gastos pagados</div><div class="value">${money(r.totalSpend)}</div>
-          <div class="sub">Filamento ${money(r.filamentSpend)} · otros ${money(r.otherSpend)}</div></div>
-        <div class="kpi"><div class="label">Resultado de caja</div><div class="value">${moneySigned(r.cashResult)}</div>
-          <div class="sub">Ingresos − comisiones − gastos</div></div>
-        <div class="kpi"><div class="label">Stock de impresión 3D</div><div class="value">${[stockGrams || !stockMl ? fmtGrams(stockGrams) : '', stockMl ? fmtMl(stockMl) : ''].filter(Boolean).join(' · ')}</div>
-          <div class="sub">Valor ${money(stockValue)} · ${S.filaments.length} bobinas y envases${S.materials.length ? ` · planchas ${money(matValue)}` : ''}${S.components.length ? ` · componentes ${money(compValue)}` : ''}</div></div>
+        <div class="kpi"><div class="label">${t('Ingresos por ventas')}</div><div class="value">${money(r.revenue)}</div>
+          <div class="sub">${r.salesCount === 1 ? t('1 venta') : t('{n} ventas', { n: r.salesCount })} · ${t('{n} uds.', { n: fmtNum(r.units) })}</div></div>
+        <div class="kpi"><div class="label">${t('Beneficio de las ventas')}</div><div class="value">${moneySigned(r.salesProfit)}</div>
+          <div class="sub">${t('Margen {pct} % · tras coste y comisiones', { pct: fmtNum(r.marginPct, 1) })}</div></div>
+        <div class="kpi"><div class="label">${t('Gastos pagados')}</div><div class="value">${money(r.totalSpend)}</div>
+          <div class="sub">${t('Filamento {a} · otros {b}', { a: money(r.filamentSpend), b: money(r.otherSpend) })}</div></div>
+        <div class="kpi"><div class="label">${t('Resultado de caja')}</div><div class="value">${moneySigned(r.cashResult)}</div>
+          <div class="sub">${t('Ingresos − comisiones − gastos')}</div></div>
+        <div class="kpi"><div class="label">${t('Stock de impresión 3D')}</div><div class="value">${[stockGrams || !stockMl ? fmtGrams(stockGrams) : '', stockMl ? fmtMl(stockMl) : ''].filter(Boolean).join(' · ')}</div>
+          <div class="sub">${t('Valor {v} · {n} bobinas y envases', { v: money(stockValue), n: S.filaments.length })}${S.materials.length ? ` · ${t('planchas {v}', { v: money(matValue) })}` : ''}${S.components.length ? ` · ${t('componentes {v}', { v: money(compValue) })}` : ''}</div></div>
       </div>
 
       <div class="card">
-        <h2>Ingresos vs. gastos · últimos 12 meses</h2>
+        <h2>${t('Ingresos vs. gastos · últimos 12 meses')}</h2>
         ${barChart(series)}
       </div>
 
       <div class="grid grid-2">
         <div class="card">
-          <h2>Stock bajo</h2>
+          <h2>${t('Stock bajo')}</h2>
           ${low.length || lowComps.length || lowMats.length ? `<ul class="alert-list">${low.map((f) => `
             <li><span><span class="swatch" style="background:${esc(f.color || '#999')}"></span>${esc(filamentLabel(f))}</span>
               <span class="nowrap"><span class="badge low">⚠ ${fmtStock(f)}</span>
-              <button class="btn small" data-action="restock" data-id="${f.id}">Reponer</button></span></li>`).join('')}${lowComps.map((c) => `
+              <button class="btn small" data-action="restock" data-id="${f.id}">${t('Reponer')}</button></span></li>`).join('')}${lowComps.map((c) => `
             <li><span>🔩 ${esc(c.name)}</span>
               <span class="nowrap"><span class="badge low">⚠ ${fmtQty(c.stock, c.unit)}</span>
-              <button class="btn small" data-action="restock-component" data-id="${c.id}">Reponer</button></span></li>`).join('')}${lowMats.map((m) => `
+              <button class="btn small" data-action="restock-component" data-id="${c.id}">${t('Reponer')}</button></span></li>`).join('')}${lowMats.map((m) => `
             <li><span>▭ ${esc(materialLabel(m))}</span>
               <span class="nowrap"><span class="badge low">⚠ ${fmtSheets(m.stock)}</span>
-              <button class="btn small" data-action="restock-material" data-id="${m.id}">Reponer</button></span></li>`).join('')}</ul>`
-            : `<p class="muted">✓ Filamento, resina, planchas y componentes por encima del mínimo.</p>`}
+              <button class="btn small" data-action="restock-material" data-id="${m.id}">${t('Reponer')}</button></span></li>`).join('')}</ul>`
+            : `<p class="muted">${t('✓ Filamento, resina, planchas y componentes por encima del mínimo.')}</p>`}
         </div>
         <div class="card">
-          <h2>Piezas más rentables · ${PERIODS[ui.period].toLowerCase()}</h2>
+          <h2>${t('Piezas más rentables')} · ${t(PERIODS[ui.period]).toLowerCase()}</h2>
           ${top.length ? `<div class="table-wrap"><table>
-            <thead><tr><th>Pieza</th><th class="num">Uds.</th><th class="num">Ingresos</th><th class="num">Beneficio</th></tr></thead>
-            <tbody>${top.map((t) => `<tr><td>${esc(t.name)}</td><td class="num">${fmtNum(t.units)}</td><td class="num">${money(t.revenue)}</td><td class="num">${moneySigned(t.profit)}</td></tr>`).join('')}</tbody>
-          </table></div>` : `<p class="muted">Sin ventas en este periodo.</p>`}
+            <thead><tr><th>${t('Pieza')}</th><th class="num">${t('Uds.')}</th><th class="num">${t('Ingresos')}</th><th class="num">${t('Beneficio')}</th></tr></thead>
+            <tbody>${top.map((x) => `<tr><td>${esc(x.name)}</td><td class="num">${fmtNum(x.units)}</td><td class="num">${money(x.revenue)}</td><td class="num">${moneySigned(x.profit)}</td></tr>`).join('')}</tbody>
+          </table></div>` : `<p class="muted">${t('Sin ventas en este periodo.')}</p>`}
         </div>
       </div>
 
       <div class="card">
-        <h2>Por línea de negocio · ${PERIODS[ui.period].toLowerCase()}</h2>
+        <h2>${t('Por línea de negocio')} · ${t(PERIODS[ui.period]).toLowerCase()}</h2>
         ${kindRows.length ? `<div class="table-wrap"><table>
-          <thead><tr><th>Línea</th><th class="num">Trabajos</th><th class="num">Uds. fabricadas</th><th class="num">Ingresos</th><th class="num">Beneficio</th><th class="num">Margen</th></tr></thead>
-          <tbody>${kindRows.map((k) => { const r = kinds[k]; return `<tr><td><span class="badge kind-${k}">${esc(KIND_SHORT[k])}</span></td>
+          <thead><tr><th>${t('Línea')}</th><th class="num">${t('Trabajos')}</th><th class="num">${t('Uds. fabricadas')}</th><th class="num">${t('Ingresos')}</th><th class="num">${t('Beneficio')}</th><th class="num">${t('Margen')}</th></tr></thead>
+          <tbody>${kindRows.map((k) => { const r = kinds[k]; return `<tr><td><span class="badge kind-${k}">${esc(t(KIND_SHORT[k]))}</span></td>
             <td class="num">${k === 'otros' ? '—' : fmtNum(r.jobs)}</td><td class="num">${k === 'otros' ? '—' : fmtNum(r.units)}</td>
             <td class="num">${money(r.revenue)}</td><td class="num">${moneySigned(r.profit)}</td>
             <td class="num">${r.revenue > 0 ? fmtNum((r.profit / r.revenue) * 100) + ' %' : '—'}</td></tr>`; }).join('')}</tbody>
-        </table></div>` : `<p class="muted">Sin trabajos ni ventas en este periodo.</p>`}
+        </table></div>` : `<p class="muted">${t('Sin trabajos ni ventas en este periodo.')}</p>`}
       </div>
 
       <div class="card">
-        <h2>Piezas fabricadas pendientes de vender</h2>
-        ${unsold.length ? `<p class="small muted">${fmtNum(unsold.reduce((s, x) => s + x.left, 0))} unidades · coste inmovilizado ${money(unsoldValue)}</p>
+        <h2>${t('Piezas fabricadas pendientes de vender')}</h2>
+        ${unsold.length ? `<p class="small muted">${t('{n} unidades · coste inmovilizado {v}', { n: fmtNum(unsold.reduce((s, x) => s + x.left, 0)), v: money(unsoldValue) })}</p>
           <div class="table-wrap"><table>
-          <thead><tr><th>Pieza</th><th>Fecha</th><th class="num">Disponibles</th><th class="num">Coste ud.</th><th class="num">Precio sugerido</th><th></th></tr></thead>
+          <thead><tr><th>${t('Pieza')}</th><th>${t('Fecha')}</th><th class="num">${t('Disponibles')}</th><th class="num">${t('Coste ud.')}</th><th class="num">${t('Precio sugerido')}</th><th></th></tr></thead>
           <tbody>${unsold.map(({ p, left }) => `<tr><td>${esc(p.name)}</td><td class="nowrap">${fmtDate(p.date)}</td><td class="num">${fmtNum(left)}</td>
             <td class="num">${money(p.cost && p.cost.unit)}</td><td class="num">${money(p.cost && p.cost.suggestedUnitPrice)}</td>
-            <td class="actions"><button class="btn small" data-action="sell-print" data-id="${p.id}">Vender</button></td></tr>`).join('')}</tbody>
-          </table></div>` : `<p class="muted">No hay piezas en inventario.</p>`}
+            <td class="actions"><button class="btn small" data-action="sell-print" data-id="${p.id}">${t('Vender')}</button></td></tr>`).join('')}</tbody>
+          </table></div>` : `<p class="muted">${t('No hay piezas en inventario.')}</p>`}
       </div>`;
   }
 
@@ -406,14 +410,14 @@
     }).join('');
 
     return `
-      <div class="legend"><span><i style="background:var(--series-1)"></i>Ingresos netos</span><span><i style="background:var(--series-2)"></i>Gastos pagados</span></div>
+      <div class="legend"><span><i style="background:var(--series-1)"></i>${t('Ingresos netos')}</span><span><i style="background:var(--series-2)"></i>${t('Gastos pagados')}</span></div>
       <div class="chart-scroll"><div class="chart" data-series='${esc(JSON.stringify(series))}'>
-        <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Ingresos y gastos por mes de los últimos 12 meses">${grid}${groups}</svg>
+        <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${t('Ingresos y gastos por mes de los últimos 12 meses')}">${grid}${groups}</svg>
         <div class="tooltip"></div>
       </div></div>
-      <details class="table-view"><summary>Ver como tabla</summary>
+      <details class="table-view"><summary>${t('Ver como tabla')}</summary>
         <div class="table-wrap"><table>
-          <thead><tr><th>Mes</th><th class="num">Ingresos netos</th><th class="num">Gastos</th><th class="num">Resultado</th></tr></thead>
+          <thead><tr><th>${t('Mes')}</th><th class="num">${t('Ingresos netos')}</th><th class="num">${t('Gastos')}</th><th class="num">${t('Resultado')}</th></tr></thead>
           <tbody>${series.map((d) => `<tr><td>${esc(monthLabel(d.month, true))}</td><td class="num">${money(d.income)}</td><td class="num">${money(d.spend)}</td><td class="num">${moneySigned(d.result)}</td></tr>`).join('')}</tbody>
         </table></div>
       </details>`;
@@ -428,9 +432,10 @@
         hit.addEventListener('mouseenter', () => {
           const d = series[+hit.dataset.i];
           tip.innerHTML = `<div><b>${esc(monthLabel(d.month, true))}</b></div>
-            <div class="row"><span><i class="swatch" style="background:var(--series-1);border-radius:3px"></i>Ingresos</span><b>${money(d.income)}</b></div>
-            <div class="row"><span><i class="swatch" style="background:var(--series-2);border-radius:3px"></i>Gastos</span><b>${money(d.spend)}</b></div>
-            <div class="row"><span>Resultado</span><b>${moneySigned(d.result)}</b></div>`;
+            <div class="row"><span><i class="swatch" style="background:var(--series-1);border-radius:3px"></i>${t('Ingresos')}</span><b>${money(d.income)}</b></div>
+            <div class="row"><span><i class="swatch" style="background:var(--series-2);border-radius:3px"></i>${t('Gastos')}</span><b>${money(d.spend)}</b></div>
+            <div class="row"><span>${t('Resultado')}</span><b>${moneySigned(d.result)}</b></div>`;
+
           tip.classList.add('show');
         });
         hit.addEventListener('mousemove', (ev) => {
@@ -448,12 +453,13 @@
   // ================================================================ FILAMENTOS
 
   const MATERIALS = ['PLA', 'PLA+', 'PETG', 'ABS', 'ASA', 'TPU', 'Nylon', 'PC', 'PVA', 'HIPS', 'CF-PLA', 'Silk PLA'];
-  const RESINS = ['Resina estándar', 'ABS-like', 'Lavable con agua', 'Tough', 'Flexible', '8K / alta definición', 'Transparente', 'Vegetal'];
+  const RESINS = [N_('Resina estándar'), 'ABS-like', N_('Lavable con agua'), 'Tough', N_('Flexible'), N_('8K / alta definición'), N_('Transparente'), N_('Vegetal')];
+  const resinNames = () => RESINS.map((r) => t(r));
 
   function viewFilaments() {
     const q = ui.filamentQuery.toLowerCase();
     const list = S.filaments
-      .filter((f) => !q || [f.name, f.material, f.brand, f.colorName, isResin(f) ? 'resina' : 'filamento'].join(' ').toLowerCase().includes(q))
+      .filter((f) => !q || [f.name, f.material, f.brand, f.colorName, isResin(f) ? t('Resina') : t('Filamento')].join(' ').toLowerCase().includes(q))
       .sort((a, b) => Number(isResin(a)) - Number(isResin(b)) || (a.material || '').localeCompare(b.material || '') || a.name.localeCompare(b.name));
     const total = (unit) => list.filter((f) => unitOf(f) === unit).reduce((s, f) => s + Math.max(0, num(f.remaining)), 0);
     const totalV = list.reduce((s, f) => s + Math.max(0, num(f.remaining)) * costPerGram(f), 0);
@@ -461,36 +467,36 @@
 
     return `
       <div class="page-head">
-        <h1>Filamento y resina</h1>
+        <h1>${t('Filamento y resina')}</h1>
         <div class="actions">
-          <input type="search" placeholder="Buscar…" data-filter="filamentQuery" value="${esc(ui.filamentQuery)}" aria-label="Buscar filamento o resina">
-          <button class="btn primary" data-action="new-filament">+ Nuevo filamento o resina</button>
+          <input type="search" placeholder="${t('Buscar…')}" data-filter="filamentQuery" value="${esc(ui.filamentQuery)}" aria-label="${t('Buscar filamento o resina')}">
+          <button class="btn primary" data-action="new-filament">${t('+ Nuevo filamento o resina')}</button>
         </div>
       </div>
       <div class="card">
         ${list.length ? `<div class="table-wrap"><table>
-          <thead><tr><th>Material</th><th>Marca</th><th class="num">Precio</th><th class="num">€/kg · €/L</th><th>Stock</th><th class="num">Valor</th><th></th></tr></thead>
+          <thead><tr><th>${t('Material')}</th><th>${t('Marca')}</th><th class="num">${t('Precio')}</th><th class="num">€/kg · €/L</th><th>${t('Stock')}</th><th class="num">${t('Valor')}</th><th></th></tr></thead>
           <tbody>${list.map((f) => {
             const pct = num(f.spoolWeight) > 0 ? Math.max(0, Math.min(100, (num(f.remaining) / num(f.spoolWeight)) * 100)) : 0;
             const low = isLow(f);
             return `<tr>
               <td><span class="swatch" style="background:${esc(f.color || '#999')}"></span><b>${esc(f.name)}</b>
-                <div class="small muted">${esc([isResin(f) ? 'Resina' : 'Filamento', f.material, f.colorName, !isResin(f) && f.diameter ? f.diameter + ' mm' : ''].filter(Boolean).join(' · '))}</div></td>
+                <div class="small muted">${esc([isResin(f) ? t('Resina') : t('Filamento'), f.material, f.colorName, !isResin(f) && f.diameter ? f.diameter + ' mm' : ''].filter(Boolean).join(' · '))}</div></td>
               <td>${esc(f.brand || '')}</td>
-              <td class="num">${money(f.price)}<div class="small muted">${containerOf(f)} de ${fmtAmount(f.spoolWeight, unitOf(f))}</div></td>
-              <td class="num">${money(costPerGram(f) * 1000)}<div class="small muted">por ${unitOf(f) === 'ml' ? 'litro' : 'kg'}</div></td>
+              <td class="num">${money(f.price)}<div class="small muted">${t(isResin(f) ? 'envase de {q}' : 'bobina de {q}', { q: fmtAmount(f.spoolWeight, unitOf(f)) })}</div></td>
+              <td class="num">${money(costPerGram(f) * 1000)}<div class="small muted">${unitOf(f) === 'ml' ? t('por litro') : t('por kg')}</div></td>
               <td><div class="stock"><div class="stock-bar${low ? ' low' : ''}"><span style="width:${pct}%"></span></div>
                 <span class="nowrap small">${fmtStock(f)}</span></div>
-                ${low ? `<span class="badge low">⚠ Stock bajo</span>` : ''}</td>
+                ${low ? `<span class="badge low">${t('⚠ Stock bajo')}</span>` : ''}</td>
               <td class="num">${money(Math.max(0, num(f.remaining)) * costPerGram(f))}</td>
               <td class="actions">
-                <button class="btn small" data-action="restock" data-id="${f.id}">Reponer</button>
-                <button class="icon-btn" data-action="edit-filament" data-id="${f.id}" aria-label="Editar" title="Editar / ajustar stock">✎</button>
-                <button class="icon-btn" data-action="delete-filament" data-id="${f.id}" aria-label="Eliminar" title="Eliminar">🗑</button>
+                <button class="btn small" data-action="restock" data-id="${f.id}">${t('Reponer')}</button>
+                <button class="icon-btn" data-action="edit-filament" data-id="${f.id}" aria-label="${t('Editar')}" title="${t('Editar / ajustar stock')}">✎</button>
+                <button class="icon-btn" data-action="delete-filament" data-id="${f.id}" aria-label="${t('Eliminar')}" title="${t('Eliminar')}">🗑</button>
               </td></tr>`;
           }).join('')}</tbody>
-          <tfoot><tr><td colspan="4">Total</td><td>${totals}</td><td class="num">${money(totalV)}</td><td></td></tr></tfoot>
-        </table></div>` : `<div class="empty">${S.filaments.length ? 'Nada coincide con la búsqueda.' : 'Aún no tienes filamento ni resina. Añade tu primera bobina o envase.'}</div>`}
+          <tfoot><tr><td colspan="4">${t('Total')}</td><td>${totals}</td><td class="num">${money(totalV)}</td><td></td></tr></tfoot>
+        </table></div>` : `<div class="empty">${S.filaments.length ? t('Nada coincide con la búsqueda.') : t('Aún no tienes filamento ni resina. Añade tu primera bobina o envase.')}</div>`}
       </div>`;
   }
 
@@ -499,25 +505,25 @@
     f = f || { kind: 'filamento', name: '', material: 'PLA', color: '#3987e5', colorName: '', brand: '', diameter: '1.75', spoolWeight: 1000, price: 20, remaining: '', lowStock: '' };
     const resin = isResin(f);
     openModal({
-      title: isNew ? 'Nuevo filamento o resina' : (resin ? 'Editar resina' : 'Editar filamento'),
+      title: isNew ? t('Nuevo filamento o resina') : (resin ? t('Editar resina') : t('Editar filamento')),
       body: `<div class="form-grid">
-        ${field('Tipo', `<select name="kind"><option value="filamento"${resin ? '' : ' selected'}>Filamento (FDM)</option><option value="resina"${resin ? ' selected' : ''}>Resina (SLA / MSLA)</option></select>`)}
-        ${field('Nombre *', inp('name', f.name, 'required placeholder="Ej. PLA Negro mate, Resina gris 8K…"'))}
-        ${field('Material', inp('material', f.material, 'list="materials"') + '<datalist id="materials"></datalist>')}
-        ${field('Marca', inp('brand', f.brand))}
-        ${field('Color', `<input type="color" name="color" value="${esc(f.color || '#999999')}">`)}
-        ${field('Nombre del color', inp('colorName', f.colorName, 'placeholder="Negro"'))}
-        <div class="field" data-only="filamento"><label>Diámetro (mm)</label><select name="diameter">${['1.75', '2.85', '3.00'].map((d) => `<option${String(f.diameter) === d ? ' selected' : ''}>${d}</option>`).join('')}</select></div>
-        <div class="field" data-only="resina"><label>Se mide en</label><select name="unit"><option value="ml"${unitOf(f) === 'ml' ? ' selected' : ''}>mililitros (ml)</option><option value="g"${resin && unitOf(f) === 'g' ? ' selected' : ''}>gramos (g)</option></select>
-          <span class="hint">Usa la misma unidad que te da el laminador.</span></div>
+        ${field(t('Tipo'), `<select name="kind"><option value="filamento"${resin ? '' : ' selected'}>${t('Filamento (FDM)')}</option><option value="resina"${resin ? ' selected' : ''}>${t('Resina (SLA / MSLA)')}</option></select>`)}
+        ${field(t('Nombre *'), inp('name', f.name, `required placeholder="${t('Ej. PLA Negro mate, Resina gris 8K…')}"`))}
+        ${field(t('Material'), inp('material', f.material, 'list="materials"') + '<datalist id="materials"></datalist>')}
+        ${field(t('Marca'), inp('brand', f.brand))}
+        ${field(t('Color'), `<input type="color" name="color" value="${esc(f.color || '#999999')}">`)}
+        ${field(t('Nombre del color'), inp('colorName', f.colorName, `placeholder="${t('Negro')}"`))}
+        <div class="field" data-only="filamento"><label>${t('Diámetro (mm)')}</label><select name="diameter">${['1.75', '2.85', '3.00'].map((d) => `<option${String(f.diameter) === d ? ' selected' : ''}>${d}</option>`).join('')}</select></div>
+        <div class="field" data-only="resina"><label>${t('Se mide en')}</label><select name="unit"><option value="ml"${unitOf(f) === 'ml' ? ' selected' : ''}>${t('mililitros (ml)')}</option><option value="g"${resin && unitOf(f) === 'g' ? ' selected' : ''}>${t('gramos (g)')}</option></select>
+          <span class="hint">${t('Usa la misma unidad que te da el laminador.')}</span></div>
         ${field('<span data-lbl="size"></span> *', numInp('spoolWeight', f.spoolWeight, 'required min="1"'))}
         ${field('<span data-lbl="price"></span> *', numInp('price', f.price, 'required min="0"'))}
         ${isNew
-          ? field('<span data-lbl="count"></span>', numInp('spools', 1, 'min="0"'), { hint: 'Define el stock inicial.' })
+          ? field('<span data-lbl="count"></span>', numInp('spools', 1, 'min="0"'), { hint: t('Define el stock inicial.') })
           : field('<span data-lbl="stock"></span>', numInp('remaining', f.remaining), { hint: '<span data-lbl="stockhint"></span>' })}
-        ${field('<span data-lbl="low"></span>', numInp('lowStock', f.lowStock, `placeholder="${S.settings.lowStockGrams}"`), { hint: 'Vacío = valor de Ajustes.' })}
-        ${isNew ? `${field('Fecha de compra', `<input type="date" name="date" value="${today()}">`)}
-          <div class="field wide"><label class="check"><input type="checkbox" name="asExpense" checked> Registrar la compra como gasto</label></div>` : ''}
+        ${field('<span data-lbl="low"></span>', numInp('lowStock', f.lowStock, `placeholder="${S.settings.lowStockGrams}"`), { hint: t('Vacío = valor de Ajustes.') })}
+        ${isNew ? `${field(t('Fecha de compra'), `<input type="date" name="date" value="${today()}">`)}
+          <div class="field wide"><label class="check"><input type="checkbox" name="asExpense" checked> ${t('Registrar la compra como gasto')}</label></div>` : ''}
       </div>`,
       onOpen: (b) => {
         const update = () => {
@@ -525,20 +531,20 @@
           const u = r ? val(b, 'unit') : 'g';
           $$('[data-only]', b).forEach((el) => { el.hidden = el.dataset.only !== (r ? 'resina' : 'filamento'); });
           const L = {
-            size: r ? `Contenido del envase (${u})` : 'Peso neto de la bobina (g)',
-            price: r ? 'Precio por envase' : 'Precio por bobina',
-            count: r ? 'Nº de envases comprados' : 'Nº de bobinas compradas',
-            stock: `Stock actual (${u})`,
-            stockhint: r ? 'Lo que queda en el envase.' : 'Ajusta tras pesar la bobina.',
-            low: `Aviso de stock bajo (${u})`,
+            size: r ? t('Contenido del envase ({u})', { u }) : t('Peso neto de la bobina (g)'),
+            price: r ? t('Precio por envase') : t('Precio por bobina'),
+            count: r ? t('Nº de envases comprados') : t('Nº de bobinas compradas'),
+            stock: t('Stock actual ({u})', { u }),
+            stockhint: r ? t('Lo que queda en el envase.') : t('Ajusta tras pesar la bobina.'),
+            low: t('Aviso de stock bajo ({u})', { u }),
           };
           $$('[data-lbl]', b).forEach((el) => { el.textContent = L[el.dataset.lbl]; });
-          $('#materials', b).innerHTML = (r ? RESINS : MATERIALS).map((m) => `<option value="${m}">`).join('');
+          $('#materials', b).innerHTML = (r ? resinNames() : MATERIALS).map((m) => `<option value="${esc(m)}">`).join('');
         };
         $('[name="kind"]', b).addEventListener('change', (e) => {
           // valores típicos al cambiar de tipo en un alta nueva
-          if (isNew && e.target.value === 'resina' && val(b, 'material') === 'PLA') { $('[name="material"]', b).value = 'Resina estándar'; $('[name="price"]', b).value = 30; }
-          if (isNew && e.target.value === 'filamento' && RESINS.includes(val(b, 'material'))) { $('[name="material"]', b).value = 'PLA'; $('[name="price"]', b).value = 20; }
+          if (isNew && e.target.value === 'resina' && val(b, 'material') === 'PLA') { $('[name="material"]', b).value = t('Resina estándar'); $('[name="price"]', b).value = 30; }
+          if (isNew && e.target.value === 'filamento' && resinNames().includes(val(b, 'material'))) { $('[name="material"]', b).value = 'PLA'; $('[name="price"]', b).value = 20; }
           update();
         });
         $('[name="unit"]', b).addEventListener('change', update);
@@ -552,7 +558,7 @@
           colorName: val(b, 'colorName'), diameter: kind === 'resina' ? '' : val(b, 'diameter'),
           spoolWeight: num(val(b, 'spoolWeight')), price: num(val(b, 'price')), lowStock: val(b, 'lowStock'),
         };
-        if (data.spoolWeight <= 0) { toast(kind === 'resina' ? 'El contenido del envase debe ser mayor que 0.' : 'El peso de la bobina debe ser mayor que 0.'); return false; }
+        if (data.spoolWeight <= 0) { toast(kind === 'resina' ? t('El contenido del envase debe ser mayor que 0.') : t('El peso de la bobina debe ser mayor que 0.')); return false; }
         if (isNew) {
           const n = num(val(b, 'spools'));
           const nf = { id: uid(), ...data, remaining: n * data.spoolWeight, createdAt: today() };
@@ -560,29 +566,29 @@
           if (checked(b, 'asExpense') && n > 0) {
             S.expenses.push({ id: uid(), date: val(b, 'date') || today(), category: 'filamento', description: `${n} × ${filamentLabel(nf)}`, amount: n * data.price, filamentId: nf.id });
           }
-          persist(kind === 'resina' ? 'Resina añadida' : 'Filamento añadido');
+          persist(kind === 'resina' ? t('Resina añadida') : t('Filamento añadido'));
         } else {
           Object.assign(f, data, { remaining: num(val(b, 'remaining')) });
-          persist(kind === 'resina' ? 'Resina actualizada' : 'Filamento actualizado');
+          persist(kind === 'resina' ? t('Resina actualizada') : t('Filamento actualizado'));
         }
       },
     });
   }
 
   function restockForm(f) {
-    const u = unitOf(f), c = containerOf(f);
+    const u = unitOf(f), resin = isResin(f);
     openModal({
-      title: `Reponer · ${f.name}`,
-      submitLabel: 'Añadir al stock',
+      title: t('Reponer · {name}', { name: f.name }),
+      submitLabel: t('Añadir al stock'),
       body: `<div class="form-grid">
-        ${field(`Nº de ${c}s`, numInp('spools', 1, 'min="0" step="1"'))}
-        ${field(`Cantidad a añadir (${u})`, numInp('grams', f.spoolWeight, 'required min="0"'))}
-        ${field('Importe pagado', numInp('amount', f.price, 'min="0"'), { hint: 'Total de la compra.' })}
-        ${field('Fecha', `<input type="date" name="date" value="${today()}">`)}
-        <div class="field wide"><label class="check"><input type="checkbox" name="asExpense" checked> Registrar como gasto</label>
-        <label class="check"><input type="checkbox" name="updatePrice"> Actualizar el precio por ${c} con este importe</label></div>
+        ${field(resin ? t('Nº de envases') : t('Nº de bobinas'), numInp('spools', 1, 'min="0" step="1"'))}
+        ${field(t('Cantidad a añadir ({u})', { u }), numInp('grams', f.spoolWeight, 'required min="0"'))}
+        ${field(t('Importe pagado'), numInp('amount', f.price, 'min="0"'), { hint: t('Total de la compra.') })}
+        ${field(t('Fecha'), `<input type="date" name="date" value="${today()}">`)}
+        <div class="field wide"><label class="check"><input type="checkbox" name="asExpense" checked> ${t('Registrar como gasto')}</label>
+        <label class="check"><input type="checkbox" name="updatePrice"> ${resin ? t('Actualizar el precio por envase con este importe') : t('Actualizar el precio por bobina con este importe')}</label></div>
       </div>
-      <p class="small muted">Stock actual: ${fmtStock(f)}</p>`,
+      <p class="small muted">${t('Stock actual: {q}', { q: fmtStock(f) })}</p>`,
       onOpen: (b) => {
         $('[name="spools"]', b).addEventListener('input', (e) => {
           const n = num(e.target.value);
@@ -595,16 +601,16 @@
         f.remaining = num(f.remaining) + qty;
         if (checked(b, 'updatePrice') && n > 0) f.price = Math.round((amount / n) * 100) / 100;
         if (checked(b, 'asExpense') && amount > 0) {
-          S.expenses.push({ id: uid(), date: val(b, 'date') || today(), category: 'filamento', description: `Reposición ${fmtAmount(qty, u)} · ${filamentLabel(f)}`, amount, filamentId: f.id });
+          S.expenses.push({ id: uid(), date: val(b, 'date') || today(), category: 'filamento', description: t('Reposición {q} · {name}', { q: fmtAmount(qty, u), name: filamentLabel(f) }), amount, filamentId: f.id });
         }
-        persist(`+${fmtAmount(qty, u)} de ${f.name}`);
+        persist(t('+{q} de {name}', { q: fmtAmount(qty, u), name: f.name }));
       },
     });
   }
 
   // ================================================================ MATERIALES EN PLANCHA
 
-  const MATERIAL_CATEGORIES = ['Madera', 'Contrachapado', 'MDF', 'Metacrilato', 'Cuero', 'Fotopolímero', 'Fotolito / negativo', 'Goma para sellos', 'Cartón', 'Corcho', 'Tela', 'Papel', 'Vidrio', 'Metal', 'Otros'];
+  const MATERIAL_CATEGORIES = [N_('Madera'), N_('Contrachapado'), 'MDF', N_('Metacrilato'), N_('Cuero'), N_('Fotopolímero'), N_('Fotolito / negativo'), N_('Goma para sellos'), N_('Cartón'), N_('Corcho'), N_('Tela'), N_('Papel'), N_('Vidrio'), N_('Metal'), N_('Otros')];
 
   function viewMaterials() {
     const list = [...S.materials].sort((a, b) => (a.category || '').localeCompare(b.category || '') || a.name.localeCompare(b.name));
@@ -614,58 +620,58 @@
     const total = list.reduce((s, m) => s + Math.max(0, num(m.stock)) * num(m.price), 0);
     return `
       <div class="page-head">
-        <h1>Materiales en plancha</h1>
-        <div class="actions"><button class="btn primary" data-action="new-material">+ Nuevo material</button></div>
+        <h1>${t('Materiales en plancha')}</h1>
+        <div class="actions"><button class="btn primary" data-action="new-material">${t('+ Nuevo material')}</button></div>
       </div>
-      <p class="small muted" style="margin-top:-8px">Para corte y grabado láser (madera, MDF, metacrilato, cuero…) y sellos de insoladora (plancha de fotopolímero y fotolito/negativo). El coste se calcula por cm² según las medidas de cada pieza, más un ${fmtNum(S.settings.sheetWaste)} % de desperdicio (cámbialo en Ajustes).</p>
+      <p class="small muted" style="margin-top:-8px">${t('Para corte y grabado láser (madera, MDF, metacrilato, cuero…) y sellos de insoladora (plancha de fotopolímero y fotolito/negativo). El coste se calcula por cm² según las medidas de cada pieza, más un {pct} % de desperdicio (cámbialo en Ajustes).', { pct: fmtNum(S.settings.sheetWaste) })}</p>
       <div class="card">
         ${list.length ? `<div class="table-wrap"><table>
-          <thead><tr><th>Material</th><th class="num">Plancha</th><th class="num">Precio</th><th class="num">€/cm²</th><th class="num">Stock</th><th class="num">Usado</th><th class="num">Valor</th><th></th></tr></thead>
+          <thead><tr><th>${t('Material')}</th><th class="num">${t('Plancha')}</th><th class="num">${t('Precio')}</th><th class="num">€/cm²</th><th class="num">${t('Stock')}</th><th class="num">${t('Usado')}</th><th class="num">${t('Valor')}</th><th></th></tr></thead>
           <tbody>${list.map((m) => `<tr>
             <td><b>${esc(materialLabel(m))}</b><div class="small muted">${esc([m.category, m.supplier].filter(Boolean).join(' · '))}</div></td>
             <td class="num">${fmtNum(m.sheetWidth)} × ${fmtNum(m.sheetHeight)} mm</td>
             <td class="num">${money(m.price)}</td>
             <td class="num"><b>${money(sheetCostPerCm2(m) * 100).replace(/\s?€/, '')}</b><div class="small muted">€ / 100 cm²</div></td>
-            <td class="num">${fmtSheets(m.stock)}${matLow(m) ? '<div><span class="badge low">⚠ Stock bajo</span></div>' : ''}</td>
+            <td class="num">${fmtSheets(m.stock)}${matLow(m) ? `<div><span class="badge low">${t('⚠ Stock bajo')}</span></div>` : ''}</td>
             <td class="num">${fmtNum(used[m.id] || 0, 2)}</td>
             <td class="num">${money(Math.max(0, num(m.stock)) * num(m.price))}</td>
             <td class="actions">
-              <button class="btn small" data-action="restock-material" data-id="${m.id}">Reponer</button>
-              <button class="icon-btn" data-action="edit-material" data-id="${m.id}" aria-label="Editar" title="Editar / ajustar stock">✎</button>
-              <button class="icon-btn" data-action="delete-material" data-id="${m.id}" aria-label="Eliminar" title="Eliminar">🗑</button>
+              <button class="btn small" data-action="restock-material" data-id="${m.id}">${t('Reponer')}</button>
+              <button class="icon-btn" data-action="edit-material" data-id="${m.id}" aria-label="${t('Editar')}" title="${t('Editar / ajustar stock')}">✎</button>
+              <button class="icon-btn" data-action="delete-material" data-id="${m.id}" aria-label="${t('Eliminar')}" title="${t('Eliminar')}">🗑</button>
             </td></tr>`).join('')}</tbody>
-          <tfoot><tr><td colspan="6">Total</td><td class="num">${money(total)}</td><td></td></tr></tfoot>
-        </table></div>` : `<div class="empty">Aún no tienes materiales en plancha. Añade, por ejemplo, contrachapado de 3 mm o fotopolímero para sellos.</div>`}
+          <tfoot><tr><td colspan="6">${t('Total')}</td><td class="num">${money(total)}</td><td></td></tr></tfoot>
+        </table></div>` : `<div class="empty">${t('Aún no tienes materiales en plancha. Añade, por ejemplo, contrachapado de 3 mm o fotopolímero para sellos.')}</div>`}
       </div>`;
   }
 
   function materialForm(m) {
     const isNew = !m;
-    m = m || { name: '', category: 'Contrachapado', thickness: 3, sheetWidth: 600, sheetHeight: 400, price: '', stock: '', lowStock: 1, supplier: '' };
+    m = m || { name: '', category: t('Contrachapado'), thickness: 3, sheetWidth: 600, sheetHeight: 400, price: '', stock: '', lowStock: 1, supplier: '' };
     openModal({
-      title: isNew ? 'Nuevo material' : 'Editar material',
+      title: isNew ? t('Nuevo material') : t('Editar material'),
       body: `<div class="form-grid">
-        ${field('Nombre *', inp('name', m.name, 'required placeholder="Ej. Contrachapado de abedul"'), { wide: true })}
-        ${field('Categoría', inp('category', m.category, 'list="mat-cats"') + `<datalist id="mat-cats">${MATERIAL_CATEGORIES.map((x) => `<option value="${x}">`).join('')}</datalist>`)}
-        ${field('Grosor (mm)', numInp('thickness', m.thickness, 'min="0"'))}
-        ${field('Ancho plancha (mm) *', numInp('sheetWidth', m.sheetWidth, 'required min="1"'))}
-        ${field('Alto plancha (mm) *', numInp('sheetHeight', m.sheetHeight, 'required min="1"'), { hint: 'A4 = 297 × 210 mm.' })}
-        ${field('Precio por plancha *', numInp('price', m.price, 'required min="0"'))}
+        ${field(t('Nombre *'), inp('name', m.name, `required placeholder="${t('Ej. Contrachapado de abedul')}"`), { wide: true })}
+        ${field(t('Categoría'), inp('category', m.category, 'list="mat-cats"') + `<datalist id="mat-cats">${MATERIAL_CATEGORIES.map((x) => `<option value="${esc(t(x))}">`).join('')}</datalist>`)}
+        ${field(t('Grosor (mm)'), numInp('thickness', m.thickness, 'min="0"'))}
+        ${field(t('Ancho plancha (mm) *'), numInp('sheetWidth', m.sheetWidth, 'required min="1"'))}
+        ${field(t('Alto plancha (mm) *'), numInp('sheetHeight', m.sheetHeight, 'required min="1"'), { hint: t('A4 = 297 × 210 mm.') })}
+        ${field(t('Precio por plancha *'), numInp('price', m.price, 'required min="0"'))}
         ${isNew
-          ? field('Nº de planchas compradas', numInp('sheets', 1, 'min="0"'))
-          : field('Stock (planchas)', numInp('stock', m.stock), { hint: 'Admite decimales: 0,5 = media plancha.' })}
-        ${field('Aviso de stock bajo (planchas)', numInp('lowStock', m.lowStock, 'min="0"'))}
-        ${field('Proveedor', inp('supplier', m.supplier))}
-        ${isNew ? `${field('Fecha de compra', `<input type="date" name="date" value="${today()}">`)}
-          <div class="field wide"><label class="check"><input type="checkbox" name="asExpense" checked> Registrar la compra como gasto</label></div>` : ''}
+          ? field(t('Nº de planchas compradas'), numInp('sheets', 1, 'min="0"'))
+          : field(t('Stock (planchas)'), numInp('stock', m.stock), { hint: t('Admite decimales: 0,5 = media plancha.') })}
+        ${field(t('Aviso de stock bajo (planchas)'), numInp('lowStock', m.lowStock, 'min="0"'))}
+        ${field(t('Proveedor'), inp('supplier', m.supplier))}
+        ${isNew ? `${field(t('Fecha de compra'), `<input type="date" name="date" value="${today()}">`)}
+          <div class="field wide"><label class="check"><input type="checkbox" name="asExpense" checked> ${t('Registrar la compra como gasto')}</label></div>` : ''}
       </div>
       <div class="price-box" id="mat-preview"></div>`,
       onOpen: (b) => {
         const refresh = () => {
           const x = { price: val(b, 'price'), sheetWidth: val(b, 'sheetWidth'), sheetHeight: val(b, 'sheetHeight') };
           const cm2 = sheetCostPerCm2(x);
-          $('#mat-preview', b).innerHTML = `<div><div class="small muted">Área de la plancha</div><strong>${fmtNum((num(x.sheetWidth) * num(x.sheetHeight)) / 100)} cm²</strong></div>
-            <div><div class="small muted">Coste por 100 cm² (10×10 cm)</div><strong>${money(cm2 * 100)}</strong></div>`;
+          $('#mat-preview', b).innerHTML = `<div><div class="small muted">${t('Área de la plancha')}</div><strong>${fmtNum((num(x.sheetWidth) * num(x.sheetHeight)) / 100)} cm²</strong></div>
+            <div><div class="small muted">${t('Coste por 100 cm² (10×10 cm)')}</div><strong>${money(cm2 * 100)}</strong></div>`;
         };
         b.addEventListener('input', refresh);
         refresh();
@@ -676,7 +682,7 @@
           sheetWidth: num(val(b, 'sheetWidth')), sheetHeight: num(val(b, 'sheetHeight')), price: num(val(b, 'price')),
           lowStock: val(b, 'lowStock'), supplier: val(b, 'supplier'),
         };
-        if (data.sheetWidth <= 0 || data.sheetHeight <= 0) { toast('Indica las medidas de la plancha.'); return false; }
+        if (data.sheetWidth <= 0 || data.sheetHeight <= 0) { toast(t('Indica las medidas de la plancha.')); return false; }
         if (isNew) {
           const n = num(val(b, 'sheets'));
           const nm = { id: uid(), ...data, stock: n };
@@ -684,11 +690,11 @@
           if (checked(b, 'asExpense') && n > 0) {
             S.expenses.push({ id: uid(), date: val(b, 'date') || today(), category: 'materiales', description: `${fmtSheets(n)} · ${materialLabel(nm)}`, amount: n * data.price, materialId: nm.id });
           }
-          persist('Material añadido');
+          persist(t('Material añadido'));
         } else {
           Object.assign(m, data, { stock: num(val(b, 'stock')) });
           S.prints.forEach((p) => (p.sheets || []).forEach((it) => { if (it.materialId === m.id) it.materialName = materialLabel(m); }));
-          persist('Material actualizado');
+          persist(t('Material actualizado'));
         }
       },
     });
@@ -696,15 +702,15 @@
 
   function restockMaterialForm(m) {
     openModal({
-      title: `Reponer · ${materialLabel(m)}`,
-      submitLabel: 'Añadir al stock',
+      title: t('Reponer · {name}', { name: materialLabel(m) }),
+      submitLabel: t('Añadir al stock'),
       body: `<div class="form-grid">
-        ${field('Nº de planchas', numInp('sheets', 1, 'required min="0"'))}
-        ${field('Importe pagado', numInp('amount', m.price, 'min="0"'))}
-        ${field('Fecha', `<input type="date" name="date" value="${today()}">`)}
-        <div class="field wide"><label class="check"><input type="checkbox" name="asExpense" checked> Registrar como gasto</label></div>
+        ${field(t('Nº de planchas'), numInp('sheets', 1, 'required min="0"'))}
+        ${field(t('Importe pagado'), numInp('amount', m.price, 'min="0"'))}
+        ${field(t('Fecha'), `<input type="date" name="date" value="${today()}">`)}
+        <div class="field wide"><label class="check"><input type="checkbox" name="asExpense" checked> ${t('Registrar como gasto')}</label></div>
       </div>
-      <p class="small muted">Stock actual: ${fmtSheets(m.stock)}</p>`,
+      <p class="small muted">${t('Stock actual: {q}', { q: fmtSheets(m.stock) })}</p>`,
       onOpen: (b) => {
         $('[name="sheets"]', b).addEventListener('input', (e) => { $('[name="amount"]', b).value = Math.round(num(e.target.value) * num(m.price) * 100) / 100; });
       },
@@ -712,16 +718,16 @@
         const n = num(val(b, 'sheets')), amount = num(val(b, 'amount'));
         m.stock = num(m.stock) + n;
         if (checked(b, 'asExpense') && amount > 0) {
-          S.expenses.push({ id: uid(), date: val(b, 'date') || today(), category: 'materiales', description: `Reposición ${fmtSheets(n)} · ${materialLabel(m)}`, amount, materialId: m.id });
+          S.expenses.push({ id: uid(), date: val(b, 'date') || today(), category: 'materiales', description: t('Reposición {q} · {name}', { q: fmtSheets(n), name: materialLabel(m) }), amount, materialId: m.id });
         }
-        persist(`+${fmtSheets(n)} de ${m.name}`);
+        persist(t('+{q} de {name}', { q: fmtSheets(n), name: m.name }));
       },
     });
   }
 
   // ================================================================ COMPONENTES
 
-  const COMPONENT_CATEGORIES = ['Iluminación', 'Electrónica', 'Tornillería', 'Imanes', 'Cables', 'Llaveros y anillas', 'Sellos', 'Embalaje', 'Otros'];
+  const COMPONENT_CATEGORIES = [N_('Iluminación'), N_('Electrónica'), N_('Tornillería'), N_('Imanes'), N_('Cables'), N_('Llaveros y anillas'), N_('Sellos'), N_('Embalaje'), N_('Otros')];
 
   function viewComponents() {
     const list = [...S.components].sort((a, b) => (a.category || '').localeCompare(b.category || '') || a.name.localeCompare(b.name));
@@ -730,65 +736,65 @@
     const total = list.reduce((s, c) => s + Math.max(0, num(c.stock)) * componentUnitCost(c), 0);
     return `
       <div class="page-head">
-        <h1>Componentes</h1>
-        <div class="actions"><button class="btn primary" data-action="new-component">+ Nuevo componente</button></div>
+        <h1>${t('Componentes')}</h1>
+        <div class="actions"><button class="btn primary" data-action="new-component">${t('+ Nuevo componente')}</button></div>
       </div>
-      <p class="small muted" style="margin-top:-8px">Piezas externas que montas en tus impresiones: portalámparas, tiras LED, imanes, tornillos… Al registrar una impresión indica cuántas lleva cada pieza y se sumarán al coste y se descontarán del stock.</p>
+      <p class="small muted" style="margin-top:-8px">${t('Piezas externas que montas en tus impresiones: portalámparas, tiras LED, imanes, tornillos… Al registrar una impresión indica cuántas lleva cada pieza y se sumarán al coste y se descontarán del stock.')}</p>
       <div class="card">
         ${list.length ? `<div class="table-wrap"><table>
-          <thead><tr><th>Componente</th><th>Proveedor</th><th class="num">Precio paquete</th><th class="num">Coste ud.</th><th class="num">Stock</th><th class="num">Usados</th><th class="num">Valor</th><th></th></tr></thead>
+          <thead><tr><th>${t('Componente')}</th><th>${t('Proveedor')}</th><th class="num">${t('Precio paquete')}</th><th class="num">${t('Coste ud.')}</th><th class="num">${t('Stock')}</th><th class="num">${t('Usados')}</th><th class="num">${t('Valor')}</th><th></th></tr></thead>
           <tbody>${list.map((c) => `<tr>
             <td><b>${esc(c.name)}</b><div class="small muted">${esc(c.category || '')}</div></td>
             <td>${esc(c.supplier || '')}</td>
             <td class="num">${money(c.price)}<div class="small muted">${fmtQty(c.packUnits || 1, c.unit)}</div></td>
-            <td class="num"><b>${money(componentUnitCost(c))}</b><div class="small muted">por ${esc(c.unit || 'ud.')}</div></td>
-            <td class="num">${fmtQty(c.stock, c.unit)}${compLow(c) ? '<div><span class="badge low">⚠ Stock bajo</span></div>' : ''}</td>
+            <td class="num"><b>${money(componentUnitCost(c))}</b><div class="small muted">${t('por {u}', { u: esc(unitLabel(c.unit)) })}</div></td>
+            <td class="num">${fmtQty(c.stock, c.unit)}${compLow(c) ? `<div><span class="badge low">${t('⚠ Stock bajo')}</span></div>` : ''}</td>
             <td class="num">${fmtNum(used[c.id] || 0, 2)}</td>
             <td class="num">${money(Math.max(0, num(c.stock)) * componentUnitCost(c))}</td>
             <td class="actions">
-              <button class="btn small" data-action="restock-component" data-id="${c.id}">Reponer</button>
-              <button class="icon-btn" data-action="edit-component" data-id="${c.id}" aria-label="Editar" title="Editar / ajustar stock">✎</button>
-              <button class="icon-btn" data-action="delete-component" data-id="${c.id}" aria-label="Eliminar" title="Eliminar">🗑</button>
+              <button class="btn small" data-action="restock-component" data-id="${c.id}">${t('Reponer')}</button>
+              <button class="icon-btn" data-action="edit-component" data-id="${c.id}" aria-label="${t('Editar')}" title="${t('Editar / ajustar stock')}">✎</button>
+              <button class="icon-btn" data-action="delete-component" data-id="${c.id}" aria-label="${t('Eliminar')}" title="${t('Eliminar')}">🗑</button>
             </td></tr>`).join('')}</tbody>
-          <tfoot><tr><td colspan="6">Total</td><td class="num">${money(total)}</td><td></td></tr></tfoot>
-        </table></div>` : `<div class="empty">Aún no tienes componentes. Añade, por ejemplo, un portalámparas o una tira LED.</div>`}
+          <tfoot><tr><td colspan="6">${t('Total')}</td><td class="num">${money(total)}</td><td></td></tr></tfoot>
+        </table></div>` : `<div class="empty">${t('Aún no tienes componentes. Añade, por ejemplo, un portalámparas o una tira LED.')}</div>`}
       </div>`;
   }
 
   function componentForm(c) {
     const isNew = !c;
-    c = c || { name: '', category: 'Iluminación', unit: 'ud.', price: '', packUnits: 1, stock: '', lowStock: 2, supplier: '' };
+    c = c || { name: '', category: t('Iluminación'), unit: t('ud.'), price: '', packUnits: 1, stock: '', lowStock: 2, supplier: '' };
     openModal({
-      title: isNew ? 'Nuevo componente' : 'Editar componente',
+      title: isNew ? t('Nuevo componente') : t('Editar componente'),
       body: `<div class="form-grid">
-        ${field('Nombre *', inp('name', c.name, 'required placeholder="Ej. Portalámparas E14"'), { wide: true })}
-        ${field('Categoría', inp('category', c.category, 'list="comp-cats"') + `<datalist id="comp-cats">${COMPONENT_CATEGORIES.map((x) => `<option value="${x}">`).join('')}</datalist>`)}
-        ${field('Unidad', inp('unit', c.unit, 'list="comp-units"') + '<datalist id="comp-units"><option value="ud."><option value="m"><option value="cm"><option value="par"><option value="juego"></datalist>', { hint: 'Cómo lo cuentas: ud., m…' })}
-        ${field('Precio del paquete *', numInp('price', c.price, 'required min="0"'))}
-        ${field('Unidades por paquete *', numInp('packUnits', c.packUnits, 'required min="0.01"'), { hint: 'Ej. bolsa de 50 imanes → 50.' })}
+        ${field(t('Nombre *'), inp('name', c.name, `required placeholder="${t('Ej. Portalámparas E14')}"`), { wide: true })}
+        ${field(t('Categoría'), inp('category', c.category, 'list="comp-cats"') + `<datalist id="comp-cats">${COMPONENT_CATEGORIES.map((x) => `<option value="${esc(t(x))}">`).join('')}</datalist>`)}
+        ${field(t('Unidad'), inp('unit', unitLabel(c.unit), 'list="comp-units"') + `<datalist id="comp-units">${[t('ud.'), 'm', 'cm', t('par'), t('juego')].map((x) => `<option value="${esc(x)}">`).join('')}</datalist>`, { hint: t('Cómo lo cuentas: ud., m…') })}
+        ${field(t('Precio del paquete *'), numInp('price', c.price, 'required min="0"'))}
+        ${field(t('Unidades por paquete *'), numInp('packUnits', c.packUnits, 'required min="0.01"'), { hint: t('Ej. bolsa de 50 imanes → 50.') })}
         ${isNew
-          ? field('Nº de paquetes comprados', numInp('packs', 1, 'min="0"'), { hint: 'Define el stock inicial.' })
-          : field('Stock actual', numInp('stock', c.stock), { hint: 'Ajusta tras contar.' })}
-        ${field('Aviso de stock bajo', numInp('lowStock', c.lowStock, 'min="0"'))}
-        ${field('Proveedor', inp('supplier', c.supplier, 'placeholder="AliExpress, Amazon…"'))}
-        ${isNew ? `${field('Fecha de compra', `<input type="date" name="date" value="${today()}">`)}
-          <div class="field wide"><label class="check"><input type="checkbox" name="asExpense" checked> Registrar la compra como gasto</label></div>` : ''}
+          ? field(t('Nº de paquetes comprados'), numInp('packs', 1, 'min="0"'), { hint: t('Define el stock inicial.') })
+          : field(t('Stock actual'), numInp('stock', c.stock), { hint: t('Ajusta tras contar.') })}
+        ${field(t('Aviso de stock bajo'), numInp('lowStock', c.lowStock, 'min="0"'))}
+        ${field(t('Proveedor'), inp('supplier', c.supplier, 'placeholder="AliExpress, Amazon…"'))}
+        ${isNew ? `${field(t('Fecha de compra'), `<input type="date" name="date" value="${today()}">`)}
+          <div class="field wide"><label class="check"><input type="checkbox" name="asExpense" checked> ${t('Registrar la compra como gasto')}</label></div>` : ''}
       </div>
       <div class="price-box" id="comp-preview"></div>`,
       onOpen: (b) => {
         const refresh = () => {
           const unitCost = componentUnitCost({ price: val(b, 'price'), packUnits: val(b, 'packUnits') });
-          $('#comp-preview', b).innerHTML = `<div><div class="small muted">Coste por ${esc(val(b, 'unit') || 'ud.')}</div><strong>${money(unitCost)}</strong></div>`;
+          $('#comp-preview', b).innerHTML = `<div><div class="small muted">${t('Coste por {u}', { u: esc(unitLabel(val(b, 'unit'))) })}</div><strong>${money(unitCost)}</strong></div>`;
         };
         b.addEventListener('input', refresh);
         refresh();
       },
       onSubmit: (b) => {
         const data = {
-          name: val(b, 'name'), category: val(b, 'category'), unit: val(b, 'unit') || 'ud.', price: num(val(b, 'price')),
+          name: val(b, 'name'), category: val(b, 'category'), unit: !val(b, 'unit') || val(b, 'unit') === t('ud.') ? 'ud.' : val(b, 'unit'), price: num(val(b, 'price')),
           packUnits: num(val(b, 'packUnits')), lowStock: val(b, 'lowStock'), supplier: val(b, 'supplier'),
         };
-        if (data.packUnits <= 0) { toast('Las unidades por paquete deben ser mayores que 0.'); return false; }
+        if (data.packUnits <= 0) { toast(t('Las unidades por paquete deben ser mayores que 0.')); return false; }
         if (isNew) {
           const packs = num(val(b, 'packs'));
           const nc = { id: uid(), ...data, stock: packs * data.packUnits };
@@ -796,11 +802,11 @@
           if (checked(b, 'asExpense') && packs > 0) {
             S.expenses.push({ id: uid(), date: val(b, 'date') || today(), category: 'componentes', description: `${packs} × ${nc.name}`, amount: packs * data.price, componentId: nc.id });
           }
-          persist('Componente añadido');
+          persist(t('Componente añadido'));
         } else {
           Object.assign(c, data, { stock: num(val(b, 'stock')) });
           S.prints.forEach((p) => (p.components || []).forEach((it) => { if (it.componentId === c.id) it.componentName = c.name; }));
-          persist('Componente actualizado');
+          persist(t('Componente actualizado'));
         }
       },
     });
@@ -808,16 +814,16 @@
 
   function restockComponentForm(c) {
     openModal({
-      title: `Reponer · ${c.name}`,
-      submitLabel: 'Añadir al stock',
+      title: t('Reponer · {name}', { name: c.name }),
+      submitLabel: t('Añadir al stock'),
       body: `<div class="form-grid">
-        ${field('Nº de paquetes', numInp('packs', 1, 'min="0" step="1"'))}
-        ${field(`Cantidad a añadir (${esc(c.unit || 'ud.')})`, numInp('qty', c.packUnits || 1, 'required min="0"'))}
-        ${field('Importe pagado', numInp('amount', c.price, 'min="0"'))}
-        ${field('Fecha', `<input type="date" name="date" value="${today()}">`)}
-        <div class="field wide"><label class="check"><input type="checkbox" name="asExpense" checked> Registrar como gasto</label></div>
+        ${field(t('Nº de paquetes'), numInp('packs', 1, 'min="0" step="1"'))}
+        ${field(t('Cantidad a añadir ({u})', { u: esc(unitLabel(c.unit)) }), numInp('qty', c.packUnits || 1, 'required min="0"'))}
+        ${field(t('Importe pagado'), numInp('amount', c.price, 'min="0"'))}
+        ${field(t('Fecha'), `<input type="date" name="date" value="${today()}">`)}
+        <div class="field wide"><label class="check"><input type="checkbox" name="asExpense" checked> ${t('Registrar como gasto')}</label></div>
       </div>
-      <p class="small muted">Stock actual: ${fmtQty(c.stock, c.unit)}</p>`,
+      <p class="small muted">${t('Stock actual: {q}', { q: fmtQty(c.stock, c.unit) })}</p>`,
       onOpen: (b) => {
         $('[name="packs"]', b).addEventListener('input', (e) => {
           const n = num(e.target.value);
@@ -829,9 +835,10 @@
         const qty = num(val(b, 'qty')), amount = num(val(b, 'amount'));
         c.stock = num(c.stock) + qty;
         if (checked(b, 'asExpense') && amount > 0) {
-          S.expenses.push({ id: uid(), date: val(b, 'date') || today(), category: 'componentes', description: `Reposición ${fmtQty(qty, c.unit)} · ${c.name}`, amount, componentId: c.id });
+          S.expenses.push({ id: uid(), date: val(b, 'date') || today(), category: 'componentes', description: t('Reposición {q} · {name}', { q: fmtQty(qty, c.unit), name: c.name }), amount, componentId: c.id });
         }
-        persist(`+${fmtQty(qty, c.unit)} de ${c.name}`);
+        persist(t('+{q} de {name}', { q: fmtQty(qty, c.unit), name: c.name }));
+
       },
     });
   }
@@ -843,39 +850,39 @@
     const dp = defaultPrinter();
     return `
       <div class="page-head">
-        <h1>Máquinas</h1>
-        <div class="actions"><button class="btn primary" data-action="new-printer">+ Nueva máquina</button></div>
+        <h1>${t('Máquinas')}</h1>
+        <div class="actions"><button class="btn primary" data-action="new-printer">${t('+ Nueva máquina')}</button></div>
       </div>
       <div class="card">
         ${S.printers.length ? `<div class="table-wrap"><table>
-          <thead><tr><th>Máquina</th><th class="num">Consumo</th><th class="num">Precio</th><th class="num">Coste / hora</th>
-            <th>Vida útil usada</th><th class="num">Trabajos</th><th class="num">Ingresos</th><th class="num">Beneficio</th><th></th></tr></thead>
+          <thead><tr><th>${t('Máquina')}</th><th class="num">${t('Consumo')}</th><th class="num">${t('Precio')}</th><th class="num">${t('Coste / hora')}</th>
+            <th>${t('Vida útil usada')}</th><th class="num">${t('Trabajos')}</th><th class="num">${t('Ingresos')}</th><th class="num">${t('Beneficio')}</th><th></th></tr></thead>
           <tbody>${S.printers.map((pr) => {
             const st = stats[pr.id] || { hours: 0, jobs: 0, revenue: 0, profit: 0 };
             const life = num(pr.lifeHours);
             const pct = life > 0 ? Math.min(100, (st.hours / life) * 100) : 0;
             const isDefault = dp && dp.id === pr.id;
             return `<tr>
-              <td><b>${esc(pr.name)}</b> <span class="badge">${esc(MACHINE_TYPES[machineType(pr)])}</span> ${isDefault ? '<span class="badge ok">★ Predeterminada</span>' : ''}
+              <td><b>${esc(pr.name)}</b> <span class="badge">${esc(t(MACHINE_TYPES[machineType(pr)]))}</span> ${isDefault ? `<span class="badge ok">${t('★ Predeterminada')}</span>` : ''}
                 ${pr.notes ? `<div class="small muted">${esc(pr.notes)}</div>` : ''}</td>
               <td class="num">${fmtNum(pr.watts)} W</td>
               <td class="num">${money(pr.price)}</td>
               <td class="num"><b>${money(printerHourCost(pr))}</b>
-                <div class="small muted">máq. ${money(window.Calc.machineHourCost(S.settings, pr))} · luz ${money((num(pr.watts) / 1000) * num(S.settings.kwhPrice))}</div></td>
+                <div class="small muted">${t('máq. {a} · luz {b}', { a: money(window.Calc.machineHourCost(S.settings, pr)), b: money((num(pr.watts) / 1000) * num(S.settings.kwhPrice)) })}</div></td>
               <td><div class="stock"><div class="stock-bar"><span style="width:${pct}%"></span></div>
                 <span class="nowrap small">${fmtNum(st.hours, 1)} / ${fmtNum(life)} h</span></div></td>
               <td class="num">${fmtNum(st.jobs)}</td>
               <td class="num">${money(st.revenue)}</td>
               <td class="num">${moneySigned(st.profit)}</td>
               <td class="actions">
-                ${isDefault ? '' : `<button class="icon-btn" data-action="default-printer" data-id="${pr.id}" aria-label="Usar por defecto" title="Usar por defecto">☆</button>`}
-                <button class="icon-btn" data-action="edit-printer" data-id="${pr.id}" aria-label="Editar" title="Editar">✎</button>
-                <button class="icon-btn" data-action="delete-printer" data-id="${pr.id}" aria-label="Eliminar" title="Eliminar">🗑</button>
+                ${isDefault ? '' : `<button class="icon-btn" data-action="default-printer" data-id="${pr.id}" aria-label="${t('Usar por defecto')}" title="${t('Usar por defecto')}">☆</button>`}
+                <button class="icon-btn" data-action="edit-printer" data-id="${pr.id}" aria-label="${t('Editar')}" title="${t('Editar')}">✎</button>
+                <button class="icon-btn" data-action="delete-printer" data-id="${pr.id}" aria-label="${t('Eliminar')}" title="${t('Eliminar')}">🗑</button>
               </td></tr>`;
           }).join('')}</tbody>
-        </table></div>` : `<div class="empty">Añade tus impresoras 3D, láser e insoladora para que cada trabajo use su propio consumo, amortización y mantenimiento.</div>`}
+        </table></div>` : `<div class="empty">${t('Añade tus impresoras 3D, láser e insoladora para que cada trabajo use su propio consumo, amortización y mantenimiento.')}</div>`}
       </div>
-      <p class="small muted">Coste / hora = amortización (precio ÷ vida útil) + mantenimiento + electricidad (consumo × ${money(S.settings.kwhPrice)}/kWh). Ingresos y beneficio salen de las ventas de los trabajos hechos en cada máquina. Cambiar una máquina no modifica el coste de trabajos ya registrados. «Predeterminada» es la que se elige por defecto para impresión 3D.</p>`;
+      <p class="small muted">${t('Coste / hora = amortización (precio ÷ vida útil) + mantenimiento + electricidad (consumo × {kwh}/kWh). Ingresos y beneficio salen de las ventas de los trabajos hechos en cada máquina. Cambiar una máquina no modifica el coste de trabajos ya registrados. «Predeterminada» es la que se elige por defecto para impresión 3D.', { kwh: money(S.settings.kwhPrice) })}</p>`;
   }
 
   function printerForm(pr) {
@@ -883,17 +890,17 @@
     const st = S.settings;
     pr = pr || { type: '3d', name: '', notes: '', watts: st.printerWatts, price: st.printerPrice, lifeHours: st.printerLifeHours, maintenancePerHour: st.maintenancePerHour };
     openModal({
-      title: isNew ? 'Nueva máquina' : 'Editar máquina',
+      title: isNew ? t('Nueva máquina') : t('Editar máquina'),
       body: `<div class="form-grid">
-        ${field('Nombre *', inp('name', pr.name, 'required placeholder="Ej. Bambu Lab P1S, xTool S1…"'), { wide: true })}
-        ${field('Tipo', `<select name="type">${Object.entries(MACHINE_TYPES).map(([k, v]) => `<option value="${k}"${k === machineType(pr) ? ' selected' : ''}>${v}</option>`).join('')}</select>`)}
-        ${field('Consumo medio (W) *', numInp('watts', pr.watts, 'required min="0"'), { hint: 'FDM ≈ 80–150 W · resina ≈ 30–70 W · láser: incluye extractor y air assist · insoladora UV ≈ 20–60 W.' })}
-        ${field('Precio de compra *', numInp('price', pr.price, 'required min="0"'))}
-        ${field('Vida útil estimada (h) *', numInp('lifeHours', pr.lifeHours, 'required min="1"'), { hint: 'Horas en las que la amortizas.' })}
-        ${field('Mantenimiento (/h)', numInp('maintenancePerHour', pr.maintenancePerHour, 'min="0"'), { hint: 'Boquillas, FEP y pantalla LCD (resina), lentes, tubos UV…' })}
-        ${field('Notas', inp('notes', pr.notes, 'placeholder="Boquilla 0.4, módulo 20 W…"'), { wide: true })}
-        ${isNew ? `${field('Fecha de compra', `<input type="date" name="date" value="${today()}">`)}
-          <div class="field wide"><label class="check"><input type="checkbox" name="asExpense"> Registrar la compra como gasto (Máquinas y herramientas)</label></div>` : ''}
+        ${field(t('Nombre *'), inp('name', pr.name, `required placeholder="${t('Ej. Bambu Lab P1S, xTool S1…')}"`), { wide: true })}
+        ${field(t('Tipo'), `<select name="type">${Object.entries(MACHINE_TYPES).map(([k, v]) => `<option value="${k}"${k === machineType(pr) ? ' selected' : ''}>${t(v)}</option>`).join('')}</select>`)}
+        ${field(t('Consumo medio (W) *'), numInp('watts', pr.watts, 'required min="0"'), { hint: t('FDM ≈ 80–150 W · resina ≈ 30–70 W · láser: incluye extractor y air assist · insoladora UV ≈ 20–60 W.') })}
+        ${field(t('Precio de compra *'), numInp('price', pr.price, 'required min="0"'))}
+        ${field(t('Vida útil estimada (h) *'), numInp('lifeHours', pr.lifeHours, 'required min="1"'), { hint: t('Horas en las que la amortizas.') })}
+        ${field(t('Mantenimiento (/h)'), numInp('maintenancePerHour', pr.maintenancePerHour, 'min="0"'), { hint: t('Boquillas, FEP y pantalla LCD (resina), lentes, tubos UV…') })}
+        ${field(t('Notas'), inp('notes', pr.notes, `placeholder="${t('Boquilla 0.4, módulo 20 W…')}"`), { wide: true })}
+        ${isNew ? `${field(t('Fecha de compra'), `<input type="date" name="date" value="${today()}">`)}
+          <div class="field wide"><label class="check"><input type="checkbox" name="asExpense"> ${t('Registrar la compra como gasto (Máquinas y herramientas)')}</label></div>` : ''}
       </div>
       <div class="price-box" id="printer-preview"></div>`,
       onOpen: (b) => {
@@ -902,10 +909,10 @@
           const x = read();
           const life = num(x.lifeHours);
           $('#printer-preview', b).innerHTML = `
-            <div><div class="small muted">Amortización</div><strong>${money(life > 0 ? num(x.price) / life : 0)}/h</strong></div>
-            <div><div class="small muted">Mantenimiento</div><strong>${money(x.maintenancePerHour)}/h</strong></div>
-            <div><div class="small muted">Electricidad</div><strong>${money((num(x.watts) / 1000) * num(S.settings.kwhPrice))}/h</strong></div>
-            <div><div class="small muted">Total por hora</div><strong>${money(printerHourCost(x))}</strong></div>`;
+            <div><div class="small muted">${t('Amortización')}</div><strong>${money(life > 0 ? num(x.price) / life : 0)}/h</strong></div>
+            <div><div class="small muted">${t('Mantenimiento')}</div><strong>${money(x.maintenancePerHour)}/h</strong></div>
+            <div><div class="small muted">${t('Electricidad')}</div><strong>${money((num(x.watts) / 1000) * num(S.settings.kwhPrice))}/h</strong></div>
+            <div><div class="small muted">${t('Total por hora')}</div><strong>${money(printerHourCost(x))}</strong></div>`;
         };
         b.addEventListener('input', refresh);
         refresh();
@@ -915,19 +922,19 @@
           type: val(b, 'type') || '3d', name: val(b, 'name'), notes: val(b, 'notes'), watts: num(val(b, 'watts')), price: num(val(b, 'price')),
           lifeHours: num(val(b, 'lifeHours')), maintenancePerHour: num(val(b, 'maintenancePerHour')),
         };
-        if (data.lifeHours <= 0) { toast('La vida útil debe ser mayor que 0.'); return false; }
+        if (data.lifeHours <= 0) { toast(t('La vida útil debe ser mayor que 0.')); return false; }
         if (isNew) {
           const np = { id: uid(), ...data };
           S.printers.push(np);
           if (!findPrinter(S.settings.defaultPrinterId)) S.settings.defaultPrinterId = np.id;
           if (checked(b, 'asExpense') && data.price > 0) {
-            S.expenses.push({ id: uid(), date: val(b, 'date') || today(), category: 'maquinaria', description: `${MACHINE_TYPES[data.type]} ${data.name}`, amount: data.price, printerId: np.id });
+            S.expenses.push({ id: uid(), date: val(b, 'date') || today(), category: 'maquinaria', description: `${t(MACHINE_TYPES[data.type])} ${data.name}`, amount: data.price, printerId: np.id });
           }
-          persist('Máquina añadida');
+          persist(t('Máquina añadida'));
         } else {
           Object.assign(pr, data);
           S.prints.forEach((p) => { if (p.printerId === pr.id) p.printerName = pr.name; });
-          persist('Máquina actualizada');
+          persist(t('Máquina actualizada'));
         }
       },
     });
@@ -941,17 +948,17 @@
       .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
     return `
       <div class="page-head">
-        <h1>Trabajos</h1>
+        <h1>${t('Trabajos')}</h1>
         <div class="actions">
-          <select data-period="kind" aria-label="Tipo de trabajo"><option value="all">Todos los tipos</option>${Object.entries(KINDS).map(([k, v]) => `<option value="${k}"${ui.kind === k ? ' selected' : ''}>${v}</option>`).join('')}</select>
-          <button class="btn" data-action="quote">Calculadora de coste</button>
-          <button class="btn primary" data-action="new-print">+ Registrar trabajo</button>
+          <select data-period="kind" aria-label="${t('Tipo de trabajo')}"><option value="all">${t('Todos los tipos')}</option>${Object.entries(KINDS).map(([k, v]) => `<option value="${k}"${ui.kind === k ? ' selected' : ''}>${t(v)}</option>`).join('')}</select>
+          <button class="btn" data-action="quote">${t('Calculadora de coste')}</button>
+          <button class="btn primary" data-action="new-print">${t('+ Registrar trabajo')}</button>
         </div>
       </div>
       <div class="card">
         ${list.length ? `<div class="table-wrap"><table>
-          <thead><tr><th>Fecha</th><th>Pieza</th><th class="num">Uds.</th><th class="num">Material</th><th class="num">Tiempo</th>
-            <th class="num">Coste total</th><th class="num">Coste ud.</th><th class="num">PVP sugerido</th><th class="num">Vendidas</th><th></th></tr></thead>
+          <thead><tr><th>${t('Fecha')}</th><th>${t('Pieza')}</th><th class="num">${t('Uds.')}</th><th class="num">${t('Material')}</th><th class="num">${t('Tiempo')}</th>
+            <th class="num">${t('Coste total')}</th><th class="num">${t('Coste ud.')}</th><th class="num">${t('PVP sugerido')}</th><th class="num">${t('Vendidas')}</th><th></th></tr></thead>
           <tbody>${list.map((p) => {
             const c = p.cost || {};
             const byUnit = (u) => (p.items || []).filter((it) => (it.unit || unitOf(S.filaments.find((f) => f.id === it.filamentId))) === u).reduce((s, it) => s + num(it.grams), 0);
@@ -961,7 +968,7 @@
             const s = num(sold[p.id]);
             return `<tr>
               <td class="nowrap">${fmtDate(p.date)}</td>
-              <td><span class="badge kind-${k}">${KIND_SHORT[k]}</span> <b>${esc(p.name)}</b><div class="small muted">${esc([p.printerName, (p.items || []).map((it) => it.filamentName).join(', '), (p.sheets || []).map((it) => it.materialName).join(', '), (p.components || []).map((it) => `${fmtNum(it.qty, 2)}× ${it.componentName}`).join(', ')].filter(Boolean).join(' · '))}</div></td>
+              <td><span class="badge kind-${k}">${t(KIND_SHORT[k])}</span> <b>${esc(p.name)}</b><div class="small muted">${esc([p.printerName, (p.items || []).map((it) => it.filamentName).join(', '), (p.sheets || []).map((it) => it.materialName).join(', '), (p.components || []).map((it) => `${fmtNum(it.qty, 2)}× ${it.componentName}`).join(', ')].filter(Boolean).join(' · '))}</div></td>
               <td class="num">${fmtNum(p.quantity)}</td>
               <td class="num">${[g ? fmtGrams(g) : '', ml ? fmtMl(ml) : '', cm2 ? fmtNum(cm2) + ' cm²' : ''].filter(Boolean).join('<br>') || '—'}</td>
               <td class="num">${fmtHours(p.hours)}</td>
@@ -970,28 +977,28 @@
               <td class="num">${money(c.suggestedUnitPrice)}</td>
               <td class="num">${fmtNum(s)} / ${fmtNum(p.quantity)}</td>
               <td class="actions">
-                ${s < num(p.quantity) ? `<button class="btn small" data-action="sell-print" data-id="${p.id}">Vender</button>` : '<span class="badge ok">✓ Vendida</span>'}
-                <button class="icon-btn" data-action="edit-print" data-id="${p.id}" aria-label="Editar" title="Editar">✎</button>
-                <button class="icon-btn" data-action="delete-print" data-id="${p.id}" aria-label="Eliminar" title="Eliminar">🗑</button>
+                ${s < num(p.quantity) ? `<button class="btn small" data-action="sell-print" data-id="${p.id}">${t('Vender')}</button>` : `<span class="badge ok">${t('✓ Vendida')}</span>`}
+                <button class="icon-btn" data-action="edit-print" data-id="${p.id}" aria-label="${t('Editar')}" title="${t('Editar')}">✎</button>
+                <button class="icon-btn" data-action="delete-print" data-id="${p.id}" aria-label="${t('Eliminar')}" title="${t('Eliminar')}">🗑</button>
               </td></tr>`;
           }).join('')}</tbody>
-        </table></div>` : `<div class="empty">${S.prints.length ? 'No hay trabajos de este tipo.' : 'Registra tu primer trabajo para calcular su coste y descontar el material usado.'}</div>`}
+        </table></div>` : `<div class="empty">${S.prints.length ? t('No hay trabajos de este tipo.') : t('Registra tu primer trabajo para calcular su coste y descontar el material usado.')}</div>`}
       </div>
-      <p class="small muted">El coste incluye material (filamento o plancha con un ${fmtNum(S.settings.sheetWaste)} % de desperdicio), componentes, electricidad (${money(S.settings.kwhPrice)}/kWh), amortización y mantenimiento de la máquina, mano de obra, extras y un ${fmtNum(S.settings.failureRate)} % por fallos. Cámbialo en Máquinas y Ajustes.</p>`;
+      <p class="small muted">${t('El coste incluye material (filamento o plancha con un {waste} % de desperdicio), componentes, electricidad ({kwh}/kWh), amortización y mantenimiento de la máquina, mano de obra, extras y un {fail} % por fallos. Cámbialo en Máquinas y Ajustes.', { waste: fmtNum(S.settings.sheetWaste), kwh: money(S.settings.kwhPrice), fail: fmtNum(S.settings.failureRate) })}</p>`;
   }
 
   function filamentOptions(selected) {
     const opt = (f) => `<option value="${f.id}" data-unit="${unitOf(f)}"${f.id === selected ? ' selected' : ''}>${esc(filamentLabel(f))} (${fmtStock(f)})</option>`;
     const fil = S.filaments.filter((f) => !isResin(f)), res = S.filaments.filter(isResin);
-    return `<option value="">— Elige filamento o resina —</option>`
-      + (fil.length ? `<optgroup label="Filamento (g)">${fil.map(opt).join('')}</optgroup>` : '')
-      + (res.length ? `<optgroup label="Resina">${res.map(opt).join('')}</optgroup>` : '');
+    return `<option value="">${t('— Elige filamento o resina —')}</option>`
+      + (fil.length ? `<optgroup label="${t('Filamento (g)')}">${fil.map(opt).join('')}</optgroup>` : '')
+      + (res.length ? `<optgroup label="${t('Resina')}">${res.map(opt).join('')}</optgroup>` : '');
   }
 
   function printForm(p, { quoteOnly = false } = {}) {
     const isNew = !p;
     if (!S.printers.length && !quoteOnly) {
-      toast('Primero añade una máquina (impresora 3D o láser).');
+      toast(t('Primero añade una máquina (impresora 3D o láser).'));
       return printerForm();
     }
     const dp = defaultPrinter();
@@ -1003,15 +1010,15 @@
     const printerMissing = !isNew && p.printerId && !findPrinter(p.printerId);
     const selPrinterId = findPrinter(p.printerId) ? p.printerId : (dp ? dp.id : '');
     const printerField = S.printers.length
-      ? field('Máquina', `<select name="printerId">${S.printers.map((pr) =>
-          `<option value="${pr.id}"${pr.id === selPrinterId ? ' selected' : ''}>${esc(pr.name)} (${MACHINE_TYPES[machineType(pr)]}) · ${money(printerHourCost(pr))}/h</option>`).join('')}</select>`,
-          { hint: printerMissing ? `⚠ La máquina original (${esc(p.printerName || '')}) se eliminó; elige otra.` : 'Cada máquina tiene su consumo, amortización y mantenimiento.' })
+      ? field(t('Máquina'), `<select name="printerId">${S.printers.map((pr) =>
+          `<option value="${pr.id}"${pr.id === selPrinterId ? ' selected' : ''}>${esc(pr.name)} (${t(MACHINE_TYPES[machineType(pr)])}) · ${money(printerHourCost(pr))}/h</option>`).join('')}</select>`,
+          { hint: printerMissing ? t('⚠ La máquina original ({name}) se eliminó; elige otra.', { name: esc(p.printerName || '') }) : t('Cada máquina tiene su consumo, amortización y mantenimiento.') })
       : '';
 
     const itemRow = (it) => `<div class="item-row">
-        <select name="item-filament" aria-label="Filamento">${filamentOptions(it.filamentId)}</select>
-        <input name="item-grams" type="number" step="any" min="0" value="${esc(it.grams)}" aria-label="Cantidad (g o ml)" placeholder="g / ml">
-        <button type="button" class="icon-btn" data-remove-item aria-label="Quitar">✕</button></div>`;
+        <select name="item-filament" aria-label="${t('Filamento')}">${filamentOptions(it.filamentId)}</select>
+        <input name="item-grams" type="number" step="any" min="0" value="${esc(it.grams)}" aria-label="${t('Cantidad (g o ml)')}" placeholder="g / ml">
+        <button type="button" class="icon-btn" data-remove-item aria-label="${t('Quitar')}">✕</button></div>`;
 
     /** Filas de plancha propuestas según el tipo: sello = fotopolímero + fotolito; láser = primer material de corte. */
     const defaultSheets = (kind) => {
@@ -1024,57 +1031,57 @@
       const mt = S.materials.find((x) => !isPhotopolymer(x) && !isNegative(x)) || S.materials[0];
       return [{ materialId: mt.id, width: 100, height: 100 }];
     };
-    const materialOptions = (selected) => `<option value="">— Elige material —</option>` + S.materials
-      .map((m) => `<option value="${m.id}"${m.id === selected ? ' selected' : ''}>${esc(materialLabel(m))} · ${money(sheetCostPerCm2(m) * 100)}/100 cm² (${fmtNum(m.stock, 2)} pl.)</option>`).join('');
+    const materialOptions = (selected) => `<option value="">${t('— Elige material —')}</option>` + S.materials
+      .map((m) => `<option value="${m.id}"${m.id === selected ? ' selected' : ''}>${esc(materialLabel(m))} · ${money(sheetCostPerCm2(m) * 100)}/100 cm² (${t('{n} pl.', { n: fmtNum(m.stock, 2) })})</option>`).join('');
     const sheetRow = (it) => `<div class="sheet-row">
-        <select name="sheet-id" aria-label="Material">${materialOptions(it.materialId)}</select>
-        <input name="sheet-w" type="number" step="any" min="0" value="${esc(it.width)}" aria-label="Ancho por pieza (mm)" placeholder="ancho mm">
-        <input name="sheet-h" type="number" step="any" min="0" value="${esc(it.height)}" aria-label="Alto por pieza (mm)" placeholder="alto mm">
-        <button type="button" class="icon-btn" data-remove-sheet aria-label="Quitar">✕</button></div>`;
+        <select name="sheet-id" aria-label="${t('Material')}">${materialOptions(it.materialId)}</select>
+        <input name="sheet-w" type="number" step="any" min="0" value="${esc(it.width)}" aria-label="${t('Ancho por pieza (mm)')}" placeholder="${t('ancho mm')}">
+        <input name="sheet-h" type="number" step="any" min="0" value="${esc(it.height)}" aria-label="${t('Alto por pieza (mm)')}" placeholder="${t('alto mm')}">
+        <button type="button" class="icon-btn" data-remove-sheet aria-label="${t('Quitar')}">✕</button></div>`;
 
-    const componentOptions = (selected) => `<option value="">— Elige componente —</option>` + S.components
-      .map((c) => `<option value="${c.id}"${c.id === selected ? ' selected' : ''}>${esc(c.name)} · ${money(componentUnitCost(c))}/${esc(c.unit || 'ud.')} (${fmtNum(c.stock, 2)} disp.)</option>`).join('');
+    const componentOptions = (selected) => `<option value="">${t('— Elige componente —')}</option>` + S.components
+      .map((c) => `<option value="${c.id}"${c.id === selected ? ' selected' : ''}>${esc(c.name)} · ${money(componentUnitCost(c))}/${esc(unitLabel(c.unit))} (${t('{n} disp.', { n: fmtNum(c.stock, 2) })})</option>`).join('');
     const compRow = (it) => `<div class="comp-row">
-        <select name="comp-id" aria-label="Componente">${componentOptions(it.componentId)}</select>
-        <input name="comp-qty" type="number" step="any" min="0" value="${esc(it.qty)}" aria-label="Cantidad por pieza" placeholder="por pieza">
-        <button type="button" class="icon-btn" data-remove-comp aria-label="Quitar">✕</button></div>`;
+        <select name="comp-id" aria-label="${t('Componente')}">${componentOptions(it.componentId)}</select>
+        <input name="comp-qty" type="number" step="any" min="0" value="${esc(it.qty)}" aria-label="${t('Cantidad por pieza')}" placeholder="${t('por pieza')}">
+        <button type="button" class="icon-btn" data-remove-comp aria-label="${t('Quitar')}">✕</button></div>`;
 
     openModal({
-      title: quoteOnly ? 'Calculadora de coste' : isNew ? 'Registrar trabajo' : 'Editar trabajo',
-      submitLabel: quoteOnly ? 'Guardar como trabajo' : 'Guardar',
+      title: quoteOnly ? t('Calculadora de coste') : isNew ? t('Registrar trabajo') : t('Editar trabajo'),
+      submitLabel: quoteOnly ? t('Guardar como trabajo') : t('Guardar'),
       body: `<div class="form-grid">
-          ${field('Pieza / encargo *', inp('name', p.name, 'required placeholder="Ej. Soporte móvil, Sello logo, Posavasos…"'), { wide: true })}
-          ${field('Tipo de trabajo', `<select name="kind">${Object.entries(KINDS).map(([k, v]) => `<option value="${k}"${k === (p.kind || '3d') ? ' selected' : ''}>${v}</option>`).join('')}</select>`)}
+          ${field(t('Pieza / encargo *'), inp('name', p.name, `required placeholder="${t('Ej. Soporte móvil, Sello logo, Posavasos…')}"`), { wide: true })}
+          ${field(t('Tipo de trabajo'), `<select name="kind">${Object.entries(KINDS).map(([k, v]) => `<option value="${k}"${k === (p.kind || '3d') ? ' selected' : ''}>${t(v)}</option>`).join('')}</select>`)}
           ${printerField}
-          ${field('Fecha', `<input type="date" name="date" value="${esc(p.date)}">`)}
-          ${field('Unidades producidas', numInp('quantity', p.quantity, 'min="1" step="1"'), { hint: 'Piezas que salen de este trabajo.' })}
-          ${field('Horas', numInp('h', h, 'min="0" step="1"'))}
-          ${field('Minutos', numInp('m', m, 'min="0" max="59" step="1"'), { hint: '<span id="time-hint">Tiempo total de máquina.</span>' })}
+          ${field(t('Fecha'), `<input type="date" name="date" value="${esc(p.date)}">`)}
+          ${field(t('Unidades producidas'), numInp('quantity', p.quantity, 'min="1" step="1"'), { hint: t('Piezas que salen de este trabajo.') })}
+          ${field(t('Horas'), numInp('h', h, 'min="0" step="1"'))}
+          ${field(t('Minutos'), numInp('m', m, 'min="0" max="59" step="1"'), { hint: `<span id="time-hint">${t('Tiempo total de máquina.')}</span>` })}
         </div>
         <div id="sec-fil">
-          <h3 class="section-title">Filamento o resina usados (cantidad total según el laminador: g de filamento, ml de resina)</h3>
+          <h3 class="section-title">${t('Filamento o resina usados (cantidad total según el laminador: g de filamento, ml de resina)')}</h3>
           ${S.filaments.length ? `<div class="items-list" id="items">${((p.items || []).length ? p.items : [{ filamentId: S.filaments[0].id, grams: 50 }]).map(itemRow).join('')}</div>
-            <button type="button" class="btn small" id="add-item" style="margin-top:8px">+ Añadir otro filamento</button>`
-            : `<p class="small muted">Da de alta tus bobinas o envases en <a href="#filaments" data-close-link>Filamento y resina</a> para sumarlos al coste.</p>`}
+            <button type="button" class="btn small" id="add-item" style="margin-top:8px">${t('+ Añadir otro filamento')}</button>`
+            : `<p class="small muted">${t('Da de alta tus bobinas o envases en <a href="#filaments" data-close-link>Filamento y resina</a> para sumarlos al coste.')}</p>`}
         </div>
         <div id="sec-sheet">
-          <h3 class="section-title">Material en plancha (medidas de cada pieza)</h3>
+          <h3 class="section-title">${t('Material en plancha (medidas de cada pieza)')}</h3>
           ${S.materials.length ? `<div class="items-list" id="sheets">${((p.sheets || []).length ? p.sheets : defaultSheets(p.kind || '3d')).map(sheetRow).join('')}</div>
-            <button type="button" class="btn small" id="add-sheet" style="margin-top:8px">+ Añadir otro material</button>
-            <p class="small muted" style="margin:6px 0 0">Ancho × alto en mm que ocupa cada pieza en la plancha; se suma un ${fmtNum(S.settings.sheetWaste)} % de desperdicio. En sellos añade el fotopolímero y el fotolito (negativo).</p>`
-            : `<p class="small muted">Da de alta madera, metacrilato, goma para sellos… en <a href="#materials" data-close-link>Materiales</a> para sumarlos al coste.</p>`}
+            <button type="button" class="btn small" id="add-sheet" style="margin-top:8px">${t('+ Añadir otro material')}</button>
+            <p class="small muted" style="margin:6px 0 0">${t('Ancho × alto en mm que ocupa cada pieza en la plancha; se suma un {pct} % de desperdicio. En sellos añade el fotopolímero y el fotolito (negativo).', { pct: fmtNum(S.settings.sheetWaste) })}</p>`
+            : `<p class="small muted">${t('Da de alta madera, metacrilato, goma para sellos… en <a href="#materials" data-close-link>Materiales</a> para sumarlos al coste.')}</p>`}
         </div>
-        <h3 class="section-title">Componentes externos (cantidad por pieza)</h3>
+        <h3 class="section-title">${t('Componentes externos (cantidad por pieza)')}</h3>
         ${S.components.length ? `<div class="items-list" id="comps">${(p.components || []).map(compRow).join('')}</div>
-          <button type="button" class="btn small" id="add-comp" style="margin-top:8px">+ Añadir componente</button>`
-          : `<p class="small muted">¿Lleva portalámparas, LED, imanes, mangos de sello…? Dalos de alta en <a href="#components" data-close-link>Componentes</a> para sumarlos al coste.</p>`}
-        <h3 class="section-title">Otros costes</h3>
+          <button type="button" class="btn small" id="add-comp" style="margin-top:8px">${t('+ Añadir componente')}</button>`
+          : `<p class="small muted">${t('¿Lleva portalámparas, LED, imanes, mangos de sello…? Dalos de alta en <a href="#components" data-close-link>Componentes</a> para sumarlos al coste.')}</p>`}
+        <h3 class="section-title">${t('Otros costes')}</h3>
         <div class="form-grid">
-          ${field('Mano de obra (h)', numInp('laborHours', p.laborHours, 'min="0"'), { hint: `Diseño, montaje y acabado a ${money(S.settings.laborRate)}/h` })}
-          ${field('Extras (€)', numInp('extras', p.extras, 'min="0"'), { hint: 'Gastos sueltos no inventariados.' })}
-          ${field('Margen (%)', numInp('margin', p.margin, `placeholder="${S.settings.defaultMargin}"`), { hint: 'Para el precio sugerido.' })}
-          ${field('Notas', inp('notes', p.notes))}
-          ${quoteOnly || isNew ? `<div class="field wide"><label class="check"><input type="checkbox" name="deduct" ${quoteOnly ? '' : 'checked'}> Descontar materiales y componentes del stock</label></div>` : ''}
+          ${field(t('Mano de obra (h)'), numInp('laborHours', p.laborHours, 'min="0"'), { hint: t('Diseño, montaje y acabado a {rate}/h', { rate: money(S.settings.laborRate) }) })}
+          ${field(t('Extras (€)'), numInp('extras', p.extras, 'min="0"'), { hint: t('Gastos sueltos no inventariados.') })}
+          ${field(t('Margen (%)'), numInp('margin', p.margin, `placeholder="${S.settings.defaultMargin}"`), { hint: t('Para el precio sugerido.') })}
+          ${field(t('Notas'), inp('notes', p.notes))}
+          ${quoteOnly || isNew ? `<div class="field wide"><label class="check"><input type="checkbox" name="deduct" ${quoteOnly ? '' : 'checked'}> ${t('Descontar materiales y componentes del stock')}</label></div>` : ''}
         </div>
         <div class="card" style="margin:16px 0 0" id="preview"></div>`,
       onOpen: (b) => {
@@ -1084,9 +1091,9 @@
         const sheetsBox = $('#sheets', b);
         if (sheetsBox) sheetsBox.addEventListener('input', () => { sheetsTouched = true; });
         const TIME_HINTS = {
-          '3d': 'Tiempo total de impresión.',
-          laser: 'Tiempo de corte y grabado.',
-          sello: 'Insolado + post-exposición en la insoladora. El lavado y secado van en mano de obra.',
+          '3d': t('Tiempo total de impresión.'),
+          laser: t('Tiempo de corte y grabado.'),
+          sello: t('Insolado + post-exposición en la insoladora. El lavado y secado van en mano de obra.'),
         };
         const showSections = () => {
           const k = kindSel.value;
@@ -1154,22 +1161,22 @@
             .filter(({ f, g }) => f && g > num(f.remaining) + num(prev[f.id]));
           $('#preview', b).innerHTML = `
             <dl class="breakdown">
-              ${job.kind === '3d' ? `<dt>Filamento / resina</dt><dd>${money(c.material)}</dd>` : `<dt>Material en plancha (+${fmtNum(S.settings.sheetWaste)} % desperdicio)</dt><dd>${money(c.sheet)}</dd>`}
-              <dt>Electricidad${pr ? ` (${fmtNum(pr.watts)} W)` : ''}</dt><dd>${money(c.electricity)}</dd>
-              <dt>Amortización y mantenimiento${pr ? ` · ${esc(pr.name)}` : ''}</dt><dd>${money(c.machine)}</dd>
-              ${c.components ? `<dt>Componentes externos</dt><dd>${money(c.components)}</dd>` : ''}
-              <dt>Mano de obra</dt><dd>${money(c.labor)}</dd>
-              <dt>Extras</dt><dd>${money(c.extras)}</dd>
-              <dt>Margen de fallos (${fmtNum(S.settings.failureRate)} %)</dt><dd>${money(c.failure)}</dd>
-              <dt class="total">Coste total (${c.quantity} ${c.quantity === 1 ? 'ud.' : 'uds.'})</dt><dd class="total">${money(c.total)}</dd>
+              ${job.kind === '3d' ? `<dt>${t('Filamento / resina')}</dt><dd>${money(c.material)}</dd>` : `<dt>${t('Material en plancha (+{pct} % desperdicio)', { pct: fmtNum(S.settings.sheetWaste) })}</dt><dd>${money(c.sheet)}</dd>`}
+              <dt>${t('Electricidad')}${pr ? ` (${fmtNum(pr.watts)} W)` : ''}</dt><dd>${money(c.electricity)}</dd>
+              <dt>${t('Amortización y mantenimiento')}${pr ? ` · ${esc(pr.name)}` : ''}</dt><dd>${money(c.machine)}</dd>
+              ${c.components ? `<dt>${t('Componentes externos')}</dt><dd>${money(c.components)}</dd>` : ''}
+              <dt>${t('Mano de obra')}</dt><dd>${money(c.labor)}</dd>
+              <dt>${t('Extras')}</dt><dd>${money(c.extras)}</dd>
+              <dt>${t('Margen de fallos ({pct} %)', { pct: fmtNum(S.settings.failureRate) })}</dt><dd>${money(c.failure)}</dd>
+              <dt class="total">${c.quantity === 1 ? t('Coste total (1 ud.)') : t('Coste total ({n} uds.)', { n: c.quantity })}</dt><dd class="total">${money(c.total)}</dd>
             </dl>
             <div class="price-box">
-              <div><div class="small muted">Coste por unidad</div><strong>${money(c.unit)}</strong></div>
-              <div><div class="small muted">Precio sugerido (+${fmtNum(c.margin)} %)</div><strong>${money(c.suggestedUnitPrice)}</strong></div>
+              <div><div class="small muted">${t('Coste por unidad')}</div><strong>${money(c.unit)}</strong></div>
+              <div><div class="small muted">${t('Precio sugerido (+{pct} %)', { pct: fmtNum(c.margin) })}</div><strong>${money(c.suggestedUnitPrice)}</strong></div>
             </div>
-            ${short.length ? `<p class="small neg">⚠ Stock insuficiente: ${short.map(({ f }) => esc(f.name) + ' (' + fmtStock(f) + ')').join(', ')}</p>` : ''}
-            ${shortSheets.length ? `<p class="small neg">⚠ Faltan planchas: ${shortSheets.map(({ mt, n }) => `${esc(materialLabel(mt))} (necesitas ${fmtNum(n, 2)}, hay ${fmtNum(mt.stock, 2)})`).join(', ')}</p>` : ''}
-            ${shortComps.length ? `<p class="small neg">⚠ Faltan componentes: ${shortComps.map(({ c: k, q }) => `${esc(k.name)} (necesitas ${fmtNum(q, 2)}, hay ${fmtNum(k.stock, 2)})`).join(', ')}</p>` : ''}`;
+            ${short.length ? `<p class="small neg">${t('⚠ Stock insuficiente: {list}', { list: short.map(({ f }) => esc(f.name) + ' (' + fmtStock(f) + ')').join(', ') })}</p>` : ''}
+            ${shortSheets.length ? `<p class="small neg">${t('⚠ Faltan planchas: {list}', { list: shortSheets.map(({ mt, n }) => `${esc(materialLabel(mt))} (${t('necesitas {a}, hay {b}', { a: fmtNum(n, 2), b: fmtNum(mt.stock, 2) })})`).join(', ') })}</p>` : ''}
+            ${shortComps.length ? `<p class="small neg">${t('⚠ Faltan componentes: {list}', { list: shortComps.map(({ c: k, q }) => `${esc(k.name)} (${t('necesitas {a}, hay {b}', { a: fmtNum(q, 2), b: fmtNum(k.stock, 2) })})`).join(', ') })}</p>` : ''}`;
         };
         b.addEventListener('input', refresh);
         b.addEventListener('change', refresh);
@@ -1209,7 +1216,7 @@
       },
       onSubmit: (b) => {
         const job = b._readJob();
-        if (!job.items.length && !job.sheets.length && !job.components.length && !job.hours) { toast('Indica el material usado o el tiempo de máquina.'); return false; }
+        if (!job.items.length && !job.sheets.length && !job.components.length && !job.hours) { toast(t('Indica el material usado o el tiempo de máquina.')); return false; }
         const pr = findPrinter(job.printerId);
         const cost = printCost(job, filamentsById(), S.settings, pr, componentsById(), materialsById());
         const data = { ...job, printerName: pr ? pr.name : '', name: val(b, 'name'), date: val(b, 'date') || today(), notes: val(b, 'notes'), cost };
@@ -1217,13 +1224,14 @@
           const deduct = checked(b, 'deduct');
           if (deduct) applyJobStock(data, -1);
           S.prints.push({ id: uid(), ...data, stockDeducted: deduct });
-          persist(deduct ? 'Trabajo registrado y stock actualizado' : 'Trabajo registrado');
+          persist(deduct ? t('Trabajo registrado y stock actualizado') : t('Trabajo registrado'));
         } else {
           if (p.stockDeducted) { applyJobStock(p, +1); applyJobStock(data, -1); }
           Object.assign(p, data);
           // actualizar el coste en las ventas ligadas que no se hayan modificado a mano
           S.sales.forEach((s) => { if (s.printId === p.id && s.costFromPrint) s.unitCost = cost.unit; });
-          persist('Trabajo actualizado');
+          persist(t('Trabajo actualizado'));
+
         }
       },
     });
@@ -1234,41 +1242,41 @@
   function viewSales() {
     const list = S.sales.filter((s) => inPeriod(s.date, ui.salesPeriod)).sort((a, b) => (b.date || '').localeCompare(a.date || ''));
     const tot = list.reduce((acc, s) => {
-      const t = saleTotals(s);
-      acc.revenue += t.revenue; acc.fees += t.fees; acc.cogs += t.cogs; acc.profit += t.profit; acc.units += num(s.quantity);
+      const tt = saleTotals(s);
+      acc.revenue += tt.revenue; acc.fees += tt.fees; acc.cogs += tt.cogs; acc.profit += tt.profit; acc.units += num(s.quantity);
       return acc;
     }, { revenue: 0, fees: 0, cogs: 0, profit: 0, units: 0 });
 
     return `
       <div class="page-head">
-        <h1>Ventas</h1>
+        <h1>${t('Ventas')}</h1>
         <div class="actions">${periodSelect('salesPeriod', ui.salesPeriod)}
-          <button class="btn primary" data-action="new-sale">+ Nueva venta</button></div>
+          <button class="btn primary" data-action="new-sale">${t('+ Nueva venta')}</button></div>
       </div>
       <div class="card">
         ${list.length ? `<div class="table-wrap"><table>
-          <thead><tr><th>Fecha</th><th>Pieza / cliente</th><th class="num">Uds.</th><th class="num">Precio ud.</th><th class="num">Ingreso</th>
-            <th class="num">Comisiones/envío</th><th class="num">Coste</th><th class="num">Beneficio</th><th class="num">Margen</th><th></th></tr></thead>
+          <thead><tr><th>${t('Fecha')}</th><th>${t('Pieza / cliente')}</th><th class="num">${t('Uds.')}</th><th class="num">${t('Precio ud.')}</th><th class="num">${t('Ingreso')}</th>
+            <th class="num">${t('Comisiones/envío')}</th><th class="num">${t('Coste')}</th><th class="num">${t('Beneficio')}</th><th class="num">${t('Margen')}</th><th></th></tr></thead>
           <tbody>${list.map((s) => {
-            const t = saleTotals(s);
+            const tt = saleTotals(s);
             return `<tr>
               <td class="nowrap">${fmtDate(s.date)}</td>
               <td><b>${esc(s.description)}</b><div class="small muted">${esc([s.customer, s.channel].filter(Boolean).join(' · '))}</div></td>
               <td class="num">${fmtNum(s.quantity)}</td>
               <td class="num">${money(s.unitPrice)}</td>
-              <td class="num">${money(t.revenue)}</td>
-              <td class="num">${money(t.fees)}</td>
-              <td class="num">${money(t.cogs)}</td>
-              <td class="num"><b>${moneySigned(t.profit)}</b></td>
-              <td class="num">${t.revenue > 0 ? fmtNum((t.profit / t.revenue) * 100, 0) + ' %' : '—'}</td>
+              <td class="num">${money(tt.revenue)}</td>
+              <td class="num">${money(tt.fees)}</td>
+              <td class="num">${money(tt.cogs)}</td>
+              <td class="num"><b>${moneySigned(tt.profit)}</b></td>
+              <td class="num">${tt.revenue > 0 ? fmtNum((tt.profit / tt.revenue) * 100, 0) + ' %' : '—'}</td>
               <td class="actions">
-                <button class="icon-btn" data-action="edit-sale" data-id="${s.id}" aria-label="Editar" title="Editar">✎</button>
-                <button class="icon-btn" data-action="delete-sale" data-id="${s.id}" aria-label="Eliminar" title="Eliminar">🗑</button></td></tr>`;
+                <button class="icon-btn" data-action="edit-sale" data-id="${s.id}" aria-label="${t('Editar')}" title="${t('Editar')}">✎</button>
+                <button class="icon-btn" data-action="delete-sale" data-id="${s.id}" aria-label="${t('Eliminar')}" title="${t('Eliminar')}">🗑</button></td></tr>`;
           }).join('')}</tbody>
-          <tfoot><tr><td colspan="2">Total</td><td class="num">${fmtNum(tot.units)}</td><td></td><td class="num">${money(tot.revenue)}</td>
+          <tfoot><tr><td colspan="2">${t('Total')}</td><td class="num">${fmtNum(tot.units)}</td><td></td><td class="num">${money(tot.revenue)}</td>
             <td class="num">${money(tot.fees)}</td><td class="num">${money(tot.cogs)}</td><td class="num">${moneySigned(tot.profit)}</td>
             <td class="num">${tot.revenue > 0 ? fmtNum((tot.profit / tot.revenue) * 100, 0) + ' %' : '—'}</td><td></td></tr></tfoot>
-        </table></div>` : `<div class="empty">No hay ventas en este periodo.</div>`}
+        </table></div>` : `<div class="empty">${t('No hay ventas en este periodo.')}</div>`}
       </div>`;
   }
 
@@ -1280,18 +1288,18 @@
     s = s || { date: today(), printId: presetPrintId || '', description: '', quantity: 1, unitPrice: '', fees: 0, unitCost: 0, customer: '', channel: '', costFromPrint: true };
 
     openModal({
-      title: isNew ? 'Nueva venta' : 'Editar venta',
+      title: isNew ? t('Nueva venta') : t('Editar venta'),
       body: `<div class="form-grid">
-        ${field('Trabajo', `<select name="printId"><option value="">— Venta libre (sin trabajo registrado) —</option>${prints.map((p) =>
-          `<option value="${p.id}"${p.id === s.printId ? ' selected' : ''}>${esc(p.name)} · ${fmtDate(p.date)} (${fmtNum(available(p))} disp.)</option>`).join('')}</select>`, { wide: true })}
-        ${field('Descripción *', inp('description', s.description, 'required'), { wide: true })}
-        ${field('Fecha', `<input type="date" name="date" value="${esc(s.date)}">`)}
-        ${field('Unidades', numInp('quantity', s.quantity, 'min="1" step="1"'))}
-        ${field('Precio de venta por ud. *', numInp('unitPrice', s.unitPrice, 'required min="0"'))}
-        ${field('Comisiones y envío (€)', numInp('fees', s.fees, 'min="0"'), { hint: 'Total de la venta: Etsy, Wallapop, PayPal, envío…' })}
-        ${field('Coste por ud.', numInp('unitCost', s.unitCost, 'min="0"'), { hint: 'Se rellena con el coste de la impresión.' })}
-        ${field('Cliente', inp('customer', s.customer))}
-        ${field('Canal', inp('channel', s.channel, 'list="channels" placeholder="Etsy, tienda, feria…"') + '<datalist id="channels"><option value="Etsy"><option value="Wallapop"><option value="Amazon"><option value="Tienda online"><option value="Directo"><option value="Feria"></datalist>')}
+        ${field(t('Trabajo'), `<select name="printId"><option value="">${t('— Venta libre (sin trabajo registrado) —')}</option>${prints.map((p) =>
+          `<option value="${p.id}"${p.id === s.printId ? ' selected' : ''}>${esc(p.name)} · ${fmtDate(p.date)} (${t('{n} disp.', { n: fmtNum(available(p)) })})</option>`).join('')}</select>`, { wide: true })}
+        ${field(t('Descripción *'), inp('description', s.description, 'required'), { wide: true })}
+        ${field(t('Fecha'), `<input type="date" name="date" value="${esc(s.date)}">`)}
+        ${field(t('Unidades'), numInp('quantity', s.quantity, 'min="1" step="1"'))}
+        ${field(t('Precio de venta por ud. *'), numInp('unitPrice', s.unitPrice, 'required min="0"'))}
+        ${field(t('Comisiones y envío (€)'), numInp('fees', s.fees, 'min="0"'), { hint: t('Total de la venta: Etsy, Wallapop, PayPal, envío…') })}
+        ${field(t('Coste por ud.'), numInp('unitCost', s.unitCost, 'min="0"'), { hint: t('Se rellena con el coste de la impresión.') })}
+        ${field(t('Cliente'), inp('customer', s.customer))}
+        ${field(t('Canal'), inp('channel', s.channel, `list="channels" placeholder="${t('Etsy, tienda, feria…')}"`) + `<datalist id="channels">${['Etsy', 'Wallapop', 'Amazon', t('Tienda online'), t('Directo'), t('Feria')].map((x) => `<option value="${esc(x)}">`).join('')}</datalist>`)}
       </div>
       <div class="price-box" id="sale-preview"></div>`,
       onOpen: (b) => {
@@ -1310,12 +1318,12 @@
         sel.addEventListener('change', () => fillFromPrint(true));
         if (isNew && s.printId) fillFromPrint(false);
         const refresh = () => {
-          const t = saleTotals({ quantity: val(b, 'quantity'), unitPrice: val(b, 'unitPrice'), fees: val(b, 'fees'), unitCost: val(b, 'unitCost') });
+          const tt = saleTotals({ quantity: val(b, 'quantity'), unitPrice: val(b, 'unitPrice'), fees: val(b, 'fees'), unitCost: val(b, 'unitCost') });
           const p = S.prints.find((x) => x.id === sel.value);
-          const warn = p && num(val(b, 'quantity')) > available(p) ? `<div class="small neg">⚠ Solo hay ${fmtNum(available(p))} uds. disponibles de esta impresión.</div>` : '';
-          $('#sale-preview', b).innerHTML = `<div><div class="small muted">Ingreso</div><strong>${money(t.revenue)}</strong></div>
-            <div><div class="small muted">Beneficio</div><strong>${moneySigned(t.profit)}</strong></div>
-            <div><div class="small muted">Margen</div><strong>${t.revenue > 0 ? fmtNum((t.profit / t.revenue) * 100, 1) + ' %' : '—'}</strong></div>${warn}`;
+          const warn = p && num(val(b, 'quantity')) > available(p) ? `<div class="small neg">${t('⚠ Solo hay {n} uds. disponibles de esta impresión.', { n: fmtNum(available(p)) })}</div>` : '';
+          $('#sale-preview', b).innerHTML = `<div><div class="small muted">${t('Ingreso')}</div><strong>${money(tt.revenue)}</strong></div>
+            <div><div class="small muted">${t('Beneficio')}</div><strong>${moneySigned(tt.profit)}</strong></div>
+            <div><div class="small muted">${t('Margen')}</div><strong>${tt.revenue > 0 ? fmtNum((tt.profit / tt.revenue) * 100, 1) + ' %' : '—'}</strong></div>${warn}`;
         };
         b.addEventListener('input', refresh);
         b.addEventListener('change', refresh);
@@ -1331,7 +1339,7 @@
         data.costFromPrint = !!data.printId && !b._costTouched();
         if (isNew) S.sales.push({ id: uid(), ...data });
         else Object.assign(s, data);
-        persist(isNew ? 'Venta registrada' : 'Venta actualizada');
+        persist(isNew ? t('Venta registrada') : t('Venta actualizada'));
       },
     });
   }
@@ -1339,15 +1347,16 @@
   // ================================================================ GASTOS
 
   const EXPENSE_CATEGORIES = {
-    filamento: 'Filamento y resina',
-    materiales: 'Materiales en plancha',
-    componentes: 'Componentes',
-    electricidad: 'Electricidad',
-    repuestos: 'Repuestos y mantenimiento',
-    maquinaria: 'Máquinas y herramientas',
-    embalaje: 'Embalaje y envíos',
-    otros: 'Otros',
+    filamento: N_('Filamento y resina'),
+    materiales: N_('Materiales en plancha'),
+    componentes: N_('Componentes'),
+    electricidad: N_('Electricidad'),
+    repuestos: N_('Repuestos y mantenimiento'),
+    maquinaria: N_('Máquinas y herramientas'),
+    embalaje: N_('Embalaje y envíos'),
+    otros: N_('Otros'),
   };
+  const expenseCat = (k) => (EXPENSE_CATEGORIES[k] ? t(EXPENSE_CATEGORIES[k]) : k);
 
   function viewExpenses() {
     const list = S.expenses.filter((e) => inPeriod(e.date, ui.expensesPeriod)).sort((a, b) => (b.date || '').localeCompare(a.date || ''));
@@ -1356,25 +1365,25 @@
     const total = list.reduce((s, e) => s + num(e.amount), 0);
     return `
       <div class="page-head">
-        <h1>Gastos</h1>
+        <h1>${t('Gastos')}</h1>
         <div class="actions">${periodSelect('expensesPeriod', ui.expensesPeriod)}
-          <button class="btn primary" data-action="new-expense">+ Nuevo gasto</button></div>
+          <button class="btn primary" data-action="new-expense">${t('+ Nuevo gasto')}</button></div>
       </div>
       ${list.length ? `<div class="kpis">${Object.entries(byCat).sort((a, b) => b[1] - a[1]).map(([k, v]) =>
-        `<div class="kpi"><div class="label">${esc(EXPENSE_CATEGORIES[k] || k)}</div><div class="value">${money(v)}</div>
-          <div class="sub">${fmtNum(total > 0 ? (v / total) * 100 : 0)} % del total</div></div>`).join('')}</div>` : ''}
+        `<div class="kpi"><div class="label">${esc(expenseCat(k))}</div><div class="value">${money(v)}</div>
+          <div class="sub">${t('{pct} % del total', { pct: fmtNum(total > 0 ? (v / total) * 100 : 0) })}</div></div>`).join('')}</div>` : ''}
       <div class="card">
         ${list.length ? `<div class="table-wrap"><table>
-          <thead><tr><th>Fecha</th><th>Categoría</th><th>Descripción</th><th class="num">Importe</th><th></th></tr></thead>
+          <thead><tr><th>${t('Fecha')}</th><th>${t('Categoría')}</th><th>${t('Descripción')}</th><th class="num">${t('Importe')}</th><th></th></tr></thead>
           <tbody>${list.map((e) => `<tr>
             <td class="nowrap">${fmtDate(e.date)}</td>
-            <td><span class="badge">${esc(EXPENSE_CATEGORIES[e.category] || e.category)}</span></td>
+            <td><span class="badge">${esc(expenseCat(e.category))}</span></td>
             <td>${esc(e.description)}</td>
             <td class="num">${money(e.amount)}</td>
-            <td class="actions"><button class="icon-btn" data-action="edit-expense" data-id="${e.id}" aria-label="Editar" title="Editar">✎</button>
-              <button class="icon-btn" data-action="delete-expense" data-id="${e.id}" aria-label="Eliminar" title="Eliminar">🗑</button></td></tr>`).join('')}</tbody>
-          <tfoot><tr><td colspan="3">Total</td><td class="num">${money(total)}</td><td></td></tr></tfoot>
-        </table></div>` : `<div class="empty">No hay gastos en este periodo. Las compras de filamento se añaden aquí automáticamente.</div>`}
+            <td class="actions"><button class="icon-btn" data-action="edit-expense" data-id="${e.id}" aria-label="${t('Editar')}" title="${t('Editar')}">✎</button>
+              <button class="icon-btn" data-action="delete-expense" data-id="${e.id}" aria-label="${t('Eliminar')}" title="${t('Eliminar')}">🗑</button></td></tr>`).join('')}</tbody>
+          <tfoot><tr><td colspan="3">${t('Total')}</td><td class="num">${money(total)}</td><td></td></tr></tfoot>
+        </table></div>` : `<div class="empty">${t('No hay gastos en este periodo. Las compras de filamento se añaden aquí automáticamente.')}</div>`}
       </div>`;
   }
 
@@ -1382,19 +1391,19 @@
     const isNew = !e;
     e = e || { date: today(), category: 'otros', description: '', amount: '' };
     openModal({
-      title: isNew ? 'Nuevo gasto' : 'Editar gasto',
+      title: isNew ? t('Nuevo gasto') : t('Editar gasto'),
       body: `<div class="form-grid">
-        ${field('Fecha', `<input type="date" name="date" value="${esc(e.date)}">`)}
-        ${field('Categoría', `<select name="category">${Object.entries(EXPENSE_CATEGORIES).map(([k, v]) => `<option value="${k}"${k === e.category ? ' selected' : ''}>${v}</option>`).join('')}</select>`)}
-        ${field('Importe *', numInp('amount', e.amount, 'required min="0"'))}
-        ${field('Descripción *', inp('description', e.description, 'required'), { wide: true })}
+        ${field(t('Fecha'), `<input type="date" name="date" value="${esc(e.date)}">`)}
+        ${field(t('Categoría'), `<select name="category">${Object.entries(EXPENSE_CATEGORIES).map(([k, v]) => `<option value="${k}"${k === e.category ? ' selected' : ''}>${t(v)}</option>`).join('')}</select>`)}
+        ${field(t('Importe *'), numInp('amount', e.amount, 'required min="0"'))}
+        ${field(t('Descripción *'), inp('description', e.description, 'required'), { wide: true })}
       </div>
-      ${e.filamentId ? '<p class="small muted">Este gasto está ligado a una compra de filamento. Modificarlo no cambia el stock.</p>' : ''}`,
+      ${e.filamentId ? `<p class="small muted">${t('Este gasto está ligado a una compra de filamento. Modificarlo no cambia el stock.')}</p>` : ''}`,
       onSubmit: (b) => {
         const data = { date: val(b, 'date') || today(), category: val(b, 'category'), description: val(b, 'description'), amount: num(val(b, 'amount')) };
         if (isNew) S.expenses.push({ id: uid(), ...data });
         else Object.assign(e, data);
-        persist(isNew ? 'Gasto añadido' : 'Gasto actualizado');
+        persist(isNew ? t('Gasto añadido') : t('Gasto actualizado'));
       },
     });
   }
@@ -1405,67 +1414,68 @@
     const st = S.settings;
     const theme = safeGet('daprintbox:theme') || 'auto';
     return `
-      <div class="page-head"><h1>Ajustes</h1></div>
+      <div class="page-head"><h1>${t('Ajustes')}</h1></div>
       <form class="card" id="settings-form">
-        <h2>Costes de producción</h2>
+        <h2>${t('Costes de producción')}</h2>
         <div class="form-grid">
-          ${field('Moneda', `<select name="currency">${['EUR', 'USD', 'MXN', 'ARS', 'COP', 'CLP', 'GBP'].map((c) => `<option${c === st.currency ? ' selected' : ''}>${c}</option>`).join('')}</select>`)}
-          ${field('Precio electricidad (/kWh)', numInp('kwhPrice', st.kwhPrice, 'min="0"'))}
-          ${field('Mano de obra (/h)', numInp('laborRate', st.laborRate, 'min="0"'))}
-          ${field('Margen por fallos (%)', numInp('failureRate', st.failureRate, 'min="0"'), { hint: 'Impresiones o cortes fallidos.' })}
-          ${field('Desperdicio de plancha (%)', numInp('sheetWaste', st.sheetWaste, 'min="0"'), { hint: 'Márgenes, recortes y separación entre piezas.' })}
-          ${field('Margen de beneficio por defecto (%)', numInp('defaultMargin', st.defaultMargin, 'min="0"'))}
-          ${field('Aviso de stock bajo (g o ml)', numInp('lowStockGrams', st.lowStockGrams, 'min="0"'), { hint: 'Para filamento y resina sin aviso propio.' })}
+          ${field(t('Moneda'), `<select name="currency">${['EUR', 'USD', 'MXN', 'ARS', 'COP', 'CLP', 'GBP', 'CHF'].map((c) => `<option${c === st.currency ? ' selected' : ''}>${c}</option>`).join('')}</select>`)}
+          ${field(t('Precio electricidad (/kWh)'), numInp('kwhPrice', st.kwhPrice, 'min="0"'))}
+          ${field(t('Mano de obra (/h)'), numInp('laborRate', st.laborRate, 'min="0"'))}
+          ${field(t('Margen por fallos (%)'), numInp('failureRate', st.failureRate, 'min="0"'), { hint: t('Impresiones o cortes fallidos.') })}
+          ${field(t('Desperdicio de plancha (%)'), numInp('sheetWaste', st.sheetWaste, 'min="0"'), { hint: t('Márgenes, recortes y separación entre piezas.') })}
+          ${field(t('Margen de beneficio por defecto (%)'), numInp('defaultMargin', st.defaultMargin, 'min="0"'))}
+          ${field(t('Aviso de stock bajo (g o ml)'), numInp('lowStockGrams', st.lowStockGrams, 'min="0"'), { hint: t('Para filamento y resina sin aviso propio.') })}
         </div>
-        <p class="small muted">El consumo, precio, vida útil y mantenimiento de cada máquina se configuran en <a href="#printers">Máquinas</a>.</p>
-        <button class="btn primary" type="submit">Guardar ajustes</button>
+        <p class="small muted">${t('El consumo, precio, vida útil y mantenimiento de cada máquina se configuran en <a href="#printers">Máquinas</a>.')}</p>
+        <button class="btn primary" type="submit">${t('Guardar ajustes')}</button>
       </form>
 
       ${pwa.supported ? `<div class="card">
-        <h2>Instalar en el móvil o el ordenador</h2>
-        ${pwa.installed ? '<p class="small">✓ Estás usando Libreta Maker como app instalada.</p>'
-          : pwa.prompt ? `<p class="small">Instala Libreta Maker como una app: icono en la pantalla de inicio, pantalla completa y funciona sin conexión.</p>
-            <button class="btn primary" data-action="install-app">Instalar la app</button>`
-          : `<p class="small">Para tenerla como una app con su icono:</p>
+        <h2>${t('Instalar en el móvil o el ordenador')}</h2>
+        ${pwa.installed ? `<p class="small">${t('✓ Estás usando Libreta Maker como app instalada.')}</p>`
+          : pwa.prompt ? `<p class="small">${t('Instala Libreta Maker como una app: icono en la pantalla de inicio, pantalla completa y funciona sin conexión.')}</p>
+            <button class="btn primary" data-action="install-app">${t('Instalar la app')}</button>`
+          : `<p class="small">${t('Para tenerla como una app con su icono:')}</p>
             <ul class="small" style="margin:0;padding-left:20px">
-              <li><b>Android (Chrome):</b> menú <b>⋮</b> → <b>Instalar aplicación</b> o <b>Añadir a pantalla de inicio</b>.</li>
-              <li><b>iPhone (Safari):</b> botón <b>Compartir</b> → <b>Añadir a pantalla de inicio</b>.</li>
-              <li><b>Ordenador (Chrome o Edge):</b> icono de instalar a la derecha de la barra de direcciones.</li>
+              <li>${t('<b>Android (Chrome):</b> menú <b>⋮</b> → <b>Instalar aplicación</b> o <b>Añadir a pantalla de inicio</b>.')}</li>
+              <li>${t('<b>iPhone (Safari):</b> botón <b>Compartir</b> → <b>Añadir a pantalla de inicio</b>.')}</li>
+              <li>${t('<b>Ordenador (Chrome o Edge):</b> icono de instalar a la derecha de la barra de direcciones.')}</li>
             </ul>`}
       </div>` : ''}
 
       <div class="card">
-        <h2>Apariencia</h2>
-        <div class="filters">${field('Tema', `<select id="theme-select">${[['auto', 'Automático'], ['light', 'Claro'], ['dark', 'Oscuro']].map(([k, v]) => `<option value="${k}"${k === theme ? ' selected' : ''}>${v}</option>`).join('')}</select>`)}</div>
+        <h2>${t('Idioma y apariencia')}</h2>
+        <div class="filters">${field(t('Idioma'), langSelect('lang-select'))}
+          ${field(t('Tema'), `<select id="theme-select">${[['auto', N_('Automático')], ['light', N_('Claro')], ['dark', N_('Oscuro')]].map(([k, v]) => `<option value="${k}"${k === theme ? ' selected' : ''}>${t(v)}</option>`).join('')}</select>`)}</div>
       </div>
 
       ${remote ? `<div class="card">
-        <h2>Tu cuenta</h2>
-        <p class="small">Has entrado como <b>${esc(sync.user || '')}</b>${sync.email ? ` (${esc(sync.email)})` : ''}. Esta libreta es <b>solo tuya</b>: se guarda en el servidor y ningún otro usuario puede verla.</p>
-        <p class="small muted">Funciona también sin conexión: cada cambio se guarda al momento en este dispositivo y se sincroniza solo con el servidor en cuanto hay internet. Si cambias cosas en dos dispositivos a la vez, se combinan.</p>
-        <p class="small muted">Versión ${fmtNum(sync.version)}${sync.updatedAt ? ` · último cambio el ${esc(fmtDateTime(sync.updatedAt))}` : ''}</p>
+        <h2>${t('Tu cuenta')}</h2>
+        <p class="small">${t('Has entrado como <b>{user}</b>{email}. Esta libreta es <b>solo tuya</b>: se guarda en el servidor y ningún otro usuario puede verla.', { user: esc(sync.user || ''), email: sync.email ? ` (${esc(sync.email)})` : '' })}</p>
+        <p class="small muted">${t('Funciona también sin conexión: cada cambio se guarda al momento en este dispositivo y se sincroniza solo con el servidor en cuanto hay internet. Si cambias cosas en dos dispositivos a la vez, se combinan.')}</p>
+        <p class="small muted">${t('Versión {n}', { n: fmtNum(sync.version) })}${sync.updatedAt ? ` · ${t('último cambio el {date}', { date: esc(fmtDateTime(sync.updatedAt)) })}` : ''}</p>
         <div class="filters">
-          <button class="btn" data-action="history">Historial de versiones</button>
-          ${sync.email ? '' : '<button class="btn" data-action="change-password">Cambiar contraseña</button>'}
-          <button class="btn" data-action="logout">Cerrar sesión</button>
+          <button class="btn" data-action="history">${t('Historial de versiones')}</button>
+          ${sync.email ? '' : `<button class="btn" data-action="change-password">${t('Cambiar contraseña')}</button>`}
+          <button class="btn" data-action="logout">${t('Cerrar sesión')}</button>
         </div>
-        <p class="small muted" style="margin-bottom:0"><a href="condiciones.html" target="_blank" rel="noopener">Condiciones de uso</a> · <a href="privacidad.html" target="_blank" rel="noopener">Privacidad</a> · Para borrar tu cuenta, escribe al administrador indicando tu usuario.</p>
+        <p class="small muted" style="margin-bottom:0"><a href="condiciones.html" target="_blank" rel="noopener">${t('Condiciones de uso')}</a> · <a href="privacidad.html" target="_blank" rel="noopener">${t('Privacidad')}</a> · ${t('Para borrar tu cuenta, escribe al administrador indicando tu usuario.')}</p>
       </div>` : ''}
 
       <div class="card">
-        <h2>Datos</h2>
-        <p class="small muted">${remote ? 'Además del historial del servidor, puedes guardar tus propias copias.' : 'Los datos se guardan en este navegador.'} Guarda una copia de seguridad a menudo para no perderlos o para pasarlos a otro dispositivo. Si los botones de descarga no hacen nada (algunos visores web los bloquean), usa «Copia en texto».</p>
+        <h2>${t('Datos')}</h2>
+        <p class="small muted">${remote ? t('Además del historial del servidor, puedes guardar tus propias copias.') : t('Los datos se guardan en este navegador.')} ${t('Guarda una copia de seguridad a menudo para no perderlos o para pasarlos a otro dispositivo. Si los botones de descarga no hacen nada (algunos visores web los bloquean), usa «Copia en texto».')}</p>
         <div class="filters">
-          <button class="btn" data-action="backup-text">Copia en texto (copiar / pegar)</button>
-          <button class="btn" data-action="export-json">⬇ Exportar copia (JSON)</button>
-          <button class="btn" data-action="import-json">⬆ Importar copia</button>
-          <button class="btn" data-action="export-csv" data-kind="sales">Ventas CSV</button>
-          <button class="btn" data-action="export-csv" data-kind="expenses">Gastos CSV</button>
-          <button class="btn" data-action="export-csv" data-kind="filaments">Filamento y resina CSV</button>
-          <button class="btn" data-action="export-csv" data-kind="materials">Materiales CSV</button>
-          <button class="btn" data-action="export-csv" data-kind="components">Componentes CSV</button>
-          <button class="btn" data-action="load-demo">Cargar datos de ejemplo</button>
-          <button class="btn danger" data-action="reset">Borrar todo</button>
+          <button class="btn" data-action="backup-text">${t('Copia en texto (copiar / pegar)')}</button>
+          <button class="btn" data-action="export-json">${t('⬇ Exportar copia (JSON)')}</button>
+          <button class="btn" data-action="import-json">${t('⬆ Importar copia')}</button>
+          <button class="btn" data-action="export-csv" data-kind="sales">${t('Ventas CSV')}</button>
+          <button class="btn" data-action="export-csv" data-kind="expenses">${t('Gastos CSV')}</button>
+          <button class="btn" data-action="export-csv" data-kind="filaments">${t('Filamento y resina CSV')}</button>
+          <button class="btn" data-action="export-csv" data-kind="materials">${t('Materiales CSV')}</button>
+          <button class="btn" data-action="export-csv" data-kind="components">${t('Componentes CSV')}</button>
+          <button class="btn" data-action="load-demo">${t('Cargar datos de ejemplo')}</button>
+          <button class="btn danger" data-action="reset">${t('Borrar todo')}</button>
         </div>
         <input type="file" id="import-file" accept="application/json,.json" hidden>
       </div>`;
@@ -1475,8 +1485,8 @@
   function safeSet(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* sin almacenamiento */ } }
 
   function applyTheme() {
-    const t = safeGet('daprintbox:theme');
-    if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+    const th = safeGet('daprintbox:theme');
+    if (th === 'light' || th === 'dark') document.documentElement.dataset.theme = th;
     else delete document.documentElement.dataset.theme;
   }
 
@@ -1489,8 +1499,8 @@
   function download(name, content, type) {
     if (viewerDownloads) {
       viewerDownloads.save({ filename: name, data: content }).then(
-        () => toast('Archivo guardado'),
-        (err) => { if (err && err.code !== 'declined') toast('No se pudo descargar aquí; usa «Copia en texto».'); },
+        () => toast(t('Archivo guardado')),
+        (err) => { if (err && err.code !== 'declined') toast(t('No se pudo descargar aquí; usa «Copia en texto».')); },
       );
       return;
     }
@@ -1514,21 +1524,22 @@
 
   function exportCSV(kind) {
     let rows;
+    const head = (cols) => cols.map((c) => t(c));
     if (kind === 'sales') {
-      rows = [['Fecha', 'Descripción', 'Cliente', 'Canal', 'Unidades', 'Precio ud.', 'Ingreso', 'Comisiones', 'Coste', 'Beneficio']];
-      S.sales.forEach((s) => { const t = saleTotals(s); rows.push([s.date, s.description, s.customer, s.channel, num(s.quantity), num(s.unitPrice), t.revenue, t.fees, t.cogs, t.profit]); });
+      rows = [head([N_('Fecha'), N_('Descripción'), N_('Cliente'), N_('Canal'), N_('Unidades'), N_('Precio ud.'), N_('Ingreso'), N_('Comisiones'), N_('Coste'), N_('Beneficio')])];
+      S.sales.forEach((s) => { const tt = saleTotals(s); rows.push([s.date, s.description, s.customer, s.channel, num(s.quantity), num(s.unitPrice), tt.revenue, tt.fees, tt.cogs, tt.profit]); });
     } else if (kind === 'materials') {
-      rows = [['Nombre', 'Categoría', 'Grosor (mm)', 'Ancho (mm)', 'Alto (mm)', 'Precio plancha', 'Coste cm²', 'Stock (planchas)', 'Valor stock', 'Proveedor']];
+      rows = [head([N_('Nombre'), N_('Categoría'), N_('Grosor (mm)'), N_('Ancho (mm)'), N_('Alto (mm)'), N_('Precio plancha'), N_('Coste cm²'), N_('Stock (planchas)'), N_('Valor stock'), N_('Proveedor')])];
       S.materials.forEach((m) => rows.push([m.name, m.category, num(m.thickness), num(m.sheetWidth), num(m.sheetHeight), num(m.price), sheetCostPerCm2(m), num(m.stock), Math.max(0, num(m.stock)) * num(m.price), m.supplier]));
     } else if (kind === 'components') {
-      rows = [['Nombre', 'Categoría', 'Unidad', 'Precio paquete', 'Uds. por paquete', 'Coste ud.', 'Stock', 'Valor stock', 'Proveedor']];
-      S.components.forEach((c) => rows.push([c.name, c.category, c.unit, num(c.price), num(c.packUnits), componentUnitCost(c), num(c.stock), Math.max(0, num(c.stock)) * componentUnitCost(c), c.supplier]));
+      rows = [head([N_('Nombre'), N_('Categoría'), N_('Unidad'), N_('Precio paquete'), N_('Uds. por paquete'), N_('Coste ud.'), N_('Stock'), N_('Valor stock'), N_('Proveedor')])];
+      S.components.forEach((c) => rows.push([c.name, c.category, unitLabel(c.unit), num(c.price), num(c.packUnits), componentUnitCost(c), num(c.stock), Math.max(0, num(c.stock)) * componentUnitCost(c), c.supplier]));
     } else if (kind === 'expenses') {
-      rows = [['Fecha', 'Categoría', 'Descripción', 'Importe']];
-      S.expenses.forEach((e) => rows.push([e.date, EXPENSE_CATEGORIES[e.category] || e.category, e.description, num(e.amount)]));
+      rows = [head([N_('Fecha'), N_('Categoría'), N_('Descripción'), N_('Importe')])];
+      S.expenses.forEach((e) => rows.push([e.date, expenseCat(e.category), e.description, num(e.amount)]));
     } else {
-      rows = [['Tipo', 'Nombre', 'Material', 'Color', 'Marca', 'Diámetro', 'Unidad', 'Contenido bobina/envase', 'Precio', 'Stock', 'Valor stock']];
-      S.filaments.forEach((f) => rows.push([isResin(f) ? 'Resina' : 'Filamento', f.name, f.material, f.colorName, f.brand, f.diameter || '', unitOf(f), num(f.spoolWeight), num(f.price), num(f.remaining), Math.max(0, num(f.remaining)) * costPerGram(f)]));
+      rows = [head([N_('Tipo'), N_('Nombre'), N_('Material'), N_('Color'), N_('Marca'), N_('Diámetro'), N_('Unidad'), N_('Contenido bobina/envase'), N_('Precio'), N_('Stock'), N_('Valor stock')])];
+      S.filaments.forEach((f) => rows.push([isResin(f) ? t('Resina') : t('Filamento'), f.name, f.material, f.colorName, f.brand, f.diameter || '', unitOf(f), num(f.spoolWeight), num(f.price), num(f.remaining), Math.max(0, num(f.remaining)) * costPerGram(f)]));
     }
     download(`libreta-maker-${kind}-${today()}.csv`, toCSV(rows), 'text/csv;charset=utf-8');
   }
@@ -1536,26 +1547,27 @@
   /** Copia de seguridad como texto: sirve donde las descargas están bloqueadas. */
   function backupTextForm() {
     openModal({
-      title: 'Copia de seguridad en texto',
-      submitLabel: 'Reemplazar mis datos con este texto',
-      body: `<p class="small muted">Copia este texto y guárdalo en una nota o un archivo. Para restaurar, pega aquí una copia y pulsa el botón de abajo.</p>
+      title: t('Copia de seguridad en texto'),
+      submitLabel: t('Reemplazar mis datos con este texto'),
+      body: `<p class="small muted">${t('Copia este texto y guárdalo en una nota o un archivo. Para restaurar, pega aquí una copia y pulsa el botón de abajo.')}</p>
         <textarea id="backup-text" name="backup" rows="12" spellcheck="false" style="font-family:ui-monospace,monospace;font-size:.8rem">${esc(JSON.stringify(S))}</textarea>
-        <div class="filters" style="margin-top:8px"><button type="button" class="btn small" id="copy-backup">Copiar al portapapeles</button></div>`,
+        <div class="filters" style="margin-top:8px"><button type="button" class="btn small" id="copy-backup">${t('Copiar al portapapeles')}</button></div>`,
       onOpen: (b) => {
         const ta = $('#backup-text', b);
         $('#copy-backup', b).addEventListener('click', () => {
-          const done = () => toast('Copia copiada al portapapeles');
-          const fallback = () => { ta.focus(); ta.select(); toast('Texto seleccionado: cópialo con Ctrl+C / Cmd+C'); };
+          const done = () => toast(t('Copia copiada al portapapeles'));
+          const fallback = () => { ta.focus(); ta.select(); toast(t('Texto seleccionado: cópialo con Ctrl+C / Cmd+C')); };
           try { navigator.clipboard.writeText(ta.value).then(done, fallback); } catch (e) { fallback(); }
         });
       },
       onSubmit: (b) => {
         let data;
         try { data = JSON.parse(val(b, 'backup')); } catch (e) { data = null; }
-        if (!data || !Array.isArray(data.filaments)) { toast('El texto no es una copia válida de Libreta Maker.'); return false; }
+        if (!data || !Array.isArray(data.filaments)) { toast(t('El texto no es una copia válida de Libreta Maker.')); return false; }
         S = window.Store.normalize(data);
         sync.replaceAll = true;
-        persist('Copia restaurada');
+        persist(t('Copia restaurada'));
+
       },
     });
   }
@@ -1563,8 +1575,8 @@
   // ================================================================ DATOS DE EJEMPLO
 
   function demoData() {
-    const t = today();
-    const months = lastMonths(t.slice(0, 7), 6);
+    const td = today();
+    const months = lastMonths(td.slice(0, 7), 6);
     const d = (i, day) => `${months[i]}-${String(day).padStart(2, '0')}`;
     const st = { ...window.Store.DEFAULT_SETTINGS };
     const f1 = { id: uid(), name: 'PLA Negro mate', material: 'PLA', color: '#222222', colorName: 'Negro', brand: 'Sunlu', diameter: '1.75', spoolWeight: 1000, price: 19.99, remaining: 0, lowStock: '' };
@@ -1641,15 +1653,15 @@
     sell(l2, d(2, 19), 1, 38, 4.6, 'Sara', 'Etsy');
     sell(l3, d(3, 26), 15, 6, 5.1, 'Moto Club', 'Directo');
     sell(l4, d(4, 12), 3, 22, 4.4, '', 'Etsy');
-    sell(l5, d(5, Math.min(Number(t.slice(8, 10)), 12)), 18, 4.5, 3, 'Colegio San Jorge', 'Directo');
+    sell(l5, d(5, Math.min(Number(td.slice(8, 10)), 12)), 18, 4.5, 3, 'Colegio San Jorge', 'Directo');
     sell(s1, d(2, 11), 1, 29, 0, 'Asesoría Martín', 'Directo');
     sell(s2, d(4, 1), 3, 19, 2.8, 'Lucía y Pablo', 'Etsy');
-    sell(s3, d(5, Math.min(Number(t.slice(8, 10)), 9)), 2, 17, 0, 'Floristería Nube', 'Directo');
+    sell(s3, d(5, Math.min(Number(td.slice(8, 10)), 9)), 2, 17, 0, 'Floristería Nube', 'Directo');
     sell(p1, d(0, 14), 2, 14.9, 2.4, 'Laura', 'Etsy'); sell(p1, d(1, 3), 2, 14.9, 1.2, '', 'Wallapop');
     sell(p2, d(1, 18), 3, 16, 3.1, 'Floristería Nube', 'Directo');
     sell(p3, d(2, 1), 1, 24, 3.8, 'Marc', 'Etsy'); sell(p4, d(2, 20), 6, 7.5, 2, '', 'Feria');
     sell(p5, d(3, 22), 2, 45, 7.6, 'Ana', 'Etsy'); sell(p8, d(4, 27), 1, 49, 6.1, 'Jordi', 'Etsy'); sell(r1, d(4, 23), 10, 4.5, 2.6, 'Club de rol El Dado', 'Directo'); sell(p4, d(4, 2), 3, 7.5, 0, '', 'Directo');
-    sell(p6, d(4, 18), 20, 3.5, 4.2, 'Club Ciclista', 'Directo'); sell(p7, d(5, Math.min(Number(t.slice(8, 10)), 10)), 2, 16, 2.2, '', 'Wallapop');
+    sell(p6, d(4, 18), 20, 3.5, 4.2, 'Club Ciclista', 'Directo'); sell(p7, d(5, Math.min(Number(td.slice(8, 10)), 10)), 2, 16, 2.2, '', 'Wallapop');
     return state;
   }
 
@@ -1715,16 +1727,16 @@
         if (!sync.replaceAll) S = window.Store.normalize(window.Merge.merge3(sync.base, S, theirs));
         Object.assign(sync, { version: e.data.version, base: theirs, pending: true, error: '', offline: false });
         if (!modal.open) render();
-        if (!sync.replaceAll) toast('Tus cambios se han combinado con los hechos en otro dispositivo.', 5000);
+        if (!sync.replaceAll) toast(t('Tus cambios se han combinado con los hechos en otro dispositivo.'), 5000);
         saveChain = saveChain.then(() => doSave(msg));
       } else if (e.status === 401) {
-        Object.assign(sync, { pending: true, error: 'Sesión caducada' });
-        showLogin('Tu sesión ha caducado. Vuelve a entrar: tus cambios están guardados en este dispositivo y se sincronizarán.');
+        Object.assign(sync, { pending: true, error: t('Sesión caducada') });
+        showLogin(t('Tu sesión ha caducado. Vuelve a entrar: tus cambios están guardados en este dispositivo y se sincronizarán.'));
       } else if (e.status === 0) {
         Object.assign(sync, { pending: true, offline: true, error: '' }); // sin conexión: se reintentará solo
       } else {
-        Object.assign(sync, { pending: true, error: e.message });
-        toast(`No se pudo guardar en el servidor: ${e.message}`, 6000);
+        Object.assign(sync, { pending: true, error: t(e.message) });
+        toast(t('No se pudo guardar en el servidor: {error}', { error: t(e.message) }), 6000);
       }
     } finally {
       sync.saving = false;
@@ -1753,9 +1765,9 @@
       if (sync.offline) { sync.offline = false; updateSyncBadge(); }
       if (r.unchanged || sync.pending || sync.saving || modal.open) return;
       applyRemote(r);
-      toast('Libreta actualizada con los cambios hechos en otro dispositivo.', 4000);
+      toast(t('Libreta actualizada con los cambios hechos en otro dispositivo.'), 4000);
     } catch (e) {
-      if (e.status === 401) showLogin('Tu sesión ha caducado. Vuelve a entrar.');
+      if (e.status === 401) showLogin(t('Tu sesión ha caducado. Vuelve a entrar.'));
       else if (e.status === 0 && !sync.offline) { sync.offline = true; updateSyncBadge(); }
     }
   }
@@ -1771,16 +1783,16 @@
       $('.topbar').appendChild(el);
     }
     if (!sync.user) { el.innerHTML = ''; return; }
-    const [cls, label] = sync.saving ? ['saving', 'Guardando…']
-      : sync.pending && sync.offline ? ['offline', 'Sin conexión · guardado en este dispositivo']
-      : sync.pending && sync.error ? ['error', 'Sin guardar']
-      : sync.pending ? ['saving', 'Pendiente']
-      : sync.offline ? ['offline', 'Sin conexión']
-      : ['ok', 'Guardado'];
+    const [cls, label] = sync.saving ? ['saving', t('Guardando…')]
+      : sync.pending && sync.offline ? ['offline', t('Sin conexión · guardado en este dispositivo')]
+      : sync.pending && sync.error ? ['error', t('Sin guardar')]
+      : sync.pending ? ['saving', t('Pendiente')]
+      : sync.offline ? ['offline', t('Sin conexión')]
+      : ['ok', t('Guardado')];
     el.innerHTML = `<span class="dot ${cls}" aria-hidden="true"></span><span>${label}</span><span class="muted">· ${esc(sync.user)}</span>
-      ${sync.pending && !sync.saving && sync.error ? '<button class="btn small" id="retry-save">Reintentar</button>' : ''}`;
+      ${sync.pending && !sync.saving && sync.error ? `<button class="btn small" id="retry-save">${t('Reintentar')}</button>` : ''}`;
     const retry = $('#retry-save');
-    if (retry) retry.addEventListener('click', () => queueSave('Cambios guardados'));
+    if (retry) retry.addEventListener('click', () => queueSave(t('Cambios guardados')));
   }
 
   let authConfig = null;
@@ -1794,7 +1806,7 @@
         tag.src = 'https://accounts.google.com/gsi/client';
         tag.async = true;
         tag.onload = () => resolve(window.google);
-        tag.onerror = () => { googleScript = null; reject(new Error('No se pudo cargar el acceso con Google. Revisa la conexión.')); };
+        tag.onerror = () => { googleScript = null; reject(new Error(t('No se pudo cargar el acceso con Google. Revisa la conexión.'))); };
         document.head.appendChild(tag);
       });
     }
@@ -1810,11 +1822,11 @@
       // había cambios sin guardar antes de caducar la sesión
       sync.ready = true;
       render();
-      queueSave('Cambios guardados');
+      queueSave(t('Cambios guardados'));
     } else if (cache && cache.pending) {
       // cambios hechos sin conexión en una sesión anterior de esta cuenta
       useCache(cache);
-      queueSave('Cambios hechos sin conexión sincronizados');
+      queueSave(t('Cambios hechos sin conexión sincronizados'));
     } else {
       await loadFromServer();
     }
@@ -1824,11 +1836,11 @@
     sync.ready = false;
     $('.tabs').hidden = true;
     updateSyncBadge();
-    view.innerHTML = '<div class="empty">Cargando…</div>';
+    view.innerHTML = `<div class="empty">${t('Cargando…')}</div>`;
     if (!authConfig) {
       try { authConfig = await window.Remote.authConfig(); } catch (e) {
-        view.innerHTML = `<div class="card"><h2>No se pudo conectar con el servidor</h2><p class="small">${esc(e.message)}${e.status === 0 ? ' Cuando entres una vez con conexión, la app podrá abrirse también sin ella.' : ''}</p>
-          <button class="btn primary" id="retry-connect">Reintentar</button></div>`;
+        view.innerHTML = `<div class="card"><h2>${t('No se pudo conectar con el servidor')}</h2><p class="small">${esc(t(e.message))}${e.status === 0 ? ' ' + t('Cuando entres una vez con conexión, la app podrá abrirse también sin ella.') : ''}</p>
+          <button class="btn primary" id="retry-connect">${t('Reintentar')}</button></div>`;
         $('#retry-connect').addEventListener('click', () => showLogin(message));
         return;
       }
@@ -1838,36 +1850,40 @@
     const registering = mode === 'register' && withPassword && authConfig.registration;
     view.innerHTML = `<div class="card login">
       ${withPassword && authConfig.registration ? `<div class="login-tabs" role="tablist">
-        <button type="button" role="tab" aria-selected="${!registering}" data-mode="login">Entrar</button>
-        <button type="button" role="tab" aria-selected="${registering}" data-mode="register">Crear cuenta</button>
-      </div>` : '<h2>Entrar</h2>'}
+        <button type="button" role="tab" aria-selected="${!registering}" data-mode="login">${t('Entrar')}</button>
+        <button type="button" role="tab" aria-selected="${registering}" data-mode="register">${t('Crear cuenta')}</button>
+      </div>` : `<h2>${t('Entrar')}</h2>`}
       <p class="small muted">${registering
-        ? 'Crea tu cuenta: tendrás tu propia libreta, privada, guardada en el servidor.'
-        : 'Entra para ver y guardar tu libreta.'}</p>
+        ? t('Crea tu cuenta: tendrás tu propia libreta, privada, guardada en el servidor.')
+        : t('Entra para ver y guardar tu libreta.')}</p>
       ${message ? `<p class="small neg">${esc(message)}</p>` : ''}
-      ${withGoogle && !registering ? '<div id="google-btn" class="google-btn"><span class="small muted">Cargando el acceso con Google…</span></div>' : ''}
-      ${withGoogle && withPassword && !registering ? '<p class="login-or small muted">o con usuario y contraseña</p>' : ''}
+      ${withGoogle && !registering ? `<div id="google-btn" class="google-btn"><span class="small muted">${t('Cargando el acceso con Google…')}</span></div>` : ''}
+      ${withGoogle && withPassword && !registering ? `<p class="login-or small muted">${t('o con usuario y contraseña')}</p>` : ''}
       ${withPassword ? `<form id="login-form" novalidate>
         <div class="form-grid" style="grid-template-columns:1fr">
-          <div class="field"><label for="login-user">Usuario</label>
+          <div class="field"><label for="login-user">${t('Usuario')}</label>
             <input id="login-user" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" required>
-            ${registering ? '<span class="hint">Entre 2 y 50 letras, números, puntos o guiones, sin espacios.</span>' : ''}</div>
-          <div class="field"><label for="login-pass">Contraseña</label>
+            ${registering ? `<span class="hint">${t('Entre 2 y 50 letras, números, puntos o guiones, sin espacios.')}</span>` : ''}</div>
+          <div class="field"><label for="login-pass">${t('Contraseña')}</label>
             <input id="login-pass" name="password" type="password" autocomplete="${registering ? 'new-password' : 'current-password'}" required>
-            ${registering ? '<span class="hint">Mínimo 8 caracteres.</span>' : ''}</div>
-          ${registering ? `<div class="field"><label for="login-pass2">Repite la contraseña</label>
+            ${registering ? `<span class="hint">${t('Mínimo 8 caracteres.')}</span>` : ''}</div>
+          ${registering ? `<div class="field"><label for="login-pass2">${t('Repite la contraseña')}</label>
             <input id="login-pass2" type="password" autocomplete="new-password" required></div>
-          ${authConfig.registration_code ? `<div class="field"><label for="login-code">Código de invitación</label>
+          ${authConfig.registration_code ? `<div class="field"><label for="login-code">${t('Código de invitación')}</label>
             <input id="login-code" autocomplete="off" autocapitalize="none" spellcheck="false" required>
-            <span class="hint">Te lo da quien administra este servidor.</span></div>` : ''}` : ''}
+            <span class="hint">${t('Te lo da quien administra este servidor.')}</span></div>` : ''}` : ''}
         </div>
-        <button class="btn${withGoogle && !registering ? '' : ' primary'}" type="submit" style="margin-top:12px">${registering ? 'Crear cuenta y entrar' : 'Entrar'}</button>
+        <button class="btn${withGoogle && !registering ? '' : ' primary'}" type="submit" style="margin-top:12px">${registering ? t('Crear cuenta y entrar') : t('Entrar')}</button>
       </form>` : ''}
       <p class="small neg" id="login-error" hidden></p>
-      <p class="small muted login-legal">${registering ? 'Al crear la cuenta aceptas las' : 'Consulta las'} <a href="condiciones.html" target="_blank" rel="noopener">condiciones de uso</a> y la <a href="privacidad.html" target="_blank" rel="noopener">información de privacidad</a>.</p>
+      <p class="small muted login-legal">${registering
+        ? t('Al crear la cuenta aceptas las <a href="condiciones.html" target="_blank" rel="noopener">condiciones de uso</a> y la <a href="privacidad.html" target="_blank" rel="noopener">información de privacidad</a>.')
+        : t('Consulta las <a href="condiciones.html" target="_blank" rel="noopener">condiciones de uso</a> y la <a href="privacidad.html" target="_blank" rel="noopener">información de privacidad</a>.')}</p>
+      <div class="login-lang">${field(t('Idioma'), langSelect('login-lang'))}</div>
     </div>`;
     $$('[data-mode]', view).forEach((b) => b.addEventListener('click', () => showLogin('', b.dataset.mode)));
-    const showError = (msg) => { const el = $('#login-error'); el.textContent = msg; el.hidden = false; };
+    $('#login-lang').addEventListener('change', (e) => { changeLang(e.target.value); showLogin('', mode); });
+    const showError = (msg) => { const el = $('#login-error'); el.textContent = t(msg); el.hidden = false; };
 
     if (withGoogle && !registering) {
       loadGoogleScript().then((google) => {
@@ -1887,10 +1903,10 @@
         });
         const dark = document.documentElement.dataset.theme === 'dark'
           || (!document.documentElement.dataset.theme && window.matchMedia('(prefers-color-scheme: dark)').matches);
-        google.accounts.id.renderButton(box, { theme: dark ? 'filled_black' : 'outline', size: 'large', text: 'signin_with', shape: 'pill', locale: 'es', width: 280 });
+        google.accounts.id.renderButton(box, { theme: dark ? 'filled_black' : 'outline', size: 'large', text: 'signin_with', shape: 'pill', locale: window.I18n.lang(), width: 280 });
       }).catch((e) => {
         const box = $('#google-btn');
-        if (box) box.innerHTML = `<span class="small neg">${esc(e.message)}</span>`;
+        if (box) box.innerHTML = `<span class="small neg">${esc(t(e.message))}</span>`;
       });
     }
 
@@ -1907,9 +1923,9 @@
           const pass = $('#login-pass').value;
           let r;
           if (registering) {
-            if (pass !== $('#login-pass2').value) throw new Error('Las dos contraseñas no coinciden.');
+            if (pass !== $('#login-pass2').value) throw new Error(t('Las dos contraseñas no coinciden.'));
             r = await window.Remote.register(user, pass, $('#login-code') ? $('#login-code').value.trim() : '');
-            toast(`Cuenta «${r.username}» creada. ¡Bienvenido/a a tu libreta!`, 5000);
+            toast(t('Cuenta «{user}» creada. ¡Bienvenido/a a tu libreta!', { user: r.username }), 5000);
           } else {
             r = await window.Remote.login(user, pass);
           }
@@ -1941,50 +1957,50 @@
     const localCount = local.filaments.length + local.materials.length + local.prints.length + local.sales.length + local.expenses.length;
     const hasLocal = localCount > 0 && !local.demo;
     view.innerHTML = `<div class="card">
-      <h2>Tu libreta está vacía</h2>
-      <p>¿Con qué datos quieres empezar? Lo que elijas se guardará en tu libreta del servidor; solo tú podrás verla.</p>
+      <h2>${t('Tu libreta está vacía')}</h2>
+      <p>${t('¿Con qué datos quieres empezar? Lo que elijas se guardará en tu libreta del servidor; solo tú podrás verla.')}</p>
       <div class="filters">
-        ${hasLocal ? `<button class="btn primary" data-first="local">Subir los datos de este navegador (${localCount} registros)</button>` : ''}
-        <button class="btn${hasLocal ? '' : ' primary'}" data-first="paste">Pegar una copia en texto</button>
-        <button class="btn" data-first="empty">Empezar vacío</button>
-        <button class="btn" data-first="demo">Datos de ejemplo</button>
+        ${hasLocal ? `<button class="btn primary" data-first="local">${t('Subir los datos de este navegador ({n} registros)', { n: localCount })}</button>` : ''}
+        <button class="btn${hasLocal ? '' : ' primary'}" data-first="paste">${t('Pegar una copia en texto')}</button>
+        <button class="btn" data-first="empty">${t('Empezar vacío')}</button>
+        <button class="btn" data-first="demo">${t('Datos de ejemplo')}</button>
       </div>
-      <p class="small muted">¿Tienes tus datos en otro sitio (otro navegador o el enlace de Claude)? Allí, en Ajustes → «Copia en texto», cópialos y pégalos aquí.</p>
+      <p class="small muted">${t('¿Tienes tus datos en otro sitio (otro navegador o el enlace de Claude)? Allí, en Ajustes → «Copia en texto», cópialos y pégalos aquí.')}</p>
     </div>`;
     const start = (state, msg) => { S = state; sync.replaceAll = true; persist(msg); };
     $$('[data-first]', view).forEach((btn) => btn.addEventListener('click', () => {
       const kind = btn.dataset.first;
-      if (kind === 'local') start({ ...local, demo: false }, 'Datos subidos al servidor');
-      if (kind === 'empty') start(window.Store.emptyState(), 'Listo: empieza añadiendo tus máquinas y materiales');
-      if (kind === 'demo') start(demoData(), 'Datos de ejemplo cargados');
+      if (kind === 'local') start({ ...local, demo: false }, t('Datos subidos al servidor'));
+      if (kind === 'empty') start(window.Store.emptyState(), t('Listo: empieza añadiendo tus máquinas y materiales'));
+      if (kind === 'demo') start(demoData(), t('Datos de ejemplo cargados'));
       if (kind === 'paste') backupTextForm();
     }));
   }
 
   async function historyForm() {
     let r;
-    try { r = await window.Remote.history(); } catch (e) { toast(e.message, 5000); return; }
+    try { r = await window.Remote.history(); } catch (e) { toast(t(e.message), 5000); return; }
     openModal({
-      title: 'Historial de versiones',
-      submitLabel: 'Cerrar',
+      title: t('Historial de versiones'),
+      submitLabel: t('Cerrar'),
       hideCancel: true,
-      body: `<p class="small muted">Cada vez que alguien guarda se crea una versión. Si algo se ha borrado o estropeado, restaura una anterior: se guardará como versión nueva y la actual seguirá en el historial.</p>
+      body: `<p class="small muted">${t('Cada vez que alguien guarda se crea una versión. Si algo se ha borrado o estropeado, restaura una anterior: se guardará como versión nueva y la actual seguirá en el historial.')}</p>
         ${r.versions.length ? `<div class="table-wrap"><table>
-          <thead><tr><th class="num">Versión</th><th>Fecha</th><th>Usuario</th><th class="num">Tamaño</th><th></th></tr></thead>
+          <thead><tr><th class="num">${t('Versión')}</th><th>${t('Fecha')}</th><th>${t('Usuario')}</th><th class="num">${t('Tamaño')}</th><th></th></tr></thead>
           <tbody>${r.versions.map((v) => `<tr><td class="num">${v.version}</td><td class="nowrap">${esc(fmtDateTime(v.saved_at))}</td><td>${esc(v.saved_by)}</td>
             <td class="num">${fmtNum(v.bytes / 1024, 1)} KB</td>
-            <td class="actions">${v.version === sync.version ? '<span class="badge ok">Actual</span>' : `<button type="button" class="btn small" data-restore="${v.version}">Restaurar</button>`}</td></tr>`).join('')}</tbody>
-        </table></div>` : '<p class="muted">Todavía no hay versiones guardadas.</p>'}`,
+            <td class="actions">${v.version === sync.version ? `<span class="badge ok">${t('Actual')}</span>` : `<button type="button" class="btn small" data-restore="${v.version}">${t('Restaurar')}</button>`}</td></tr>`).join('')}</tbody>
+        </table></div>` : `<p class="muted">${t('Todavía no hay versiones guardadas.')}</p>`}`,
       onOpen: (b) => {
         $$('[data-restore]', b).forEach((btn) => btn.addEventListener('click', async () => {
           try {
             const h = await window.Remote.historyGet(btn.dataset.restore);
-            askConfirm(`¿Restaurar la versión ${h.version} (${fmtDateTime(h.saved_at)}, ${h.saved_by})?\nSe guardará como una versión nueva; la actual seguirá en el historial.`, () => {
+            askConfirm(t('¿Restaurar la versión {n} ({date}, {user})?\nSe guardará como una versión nueva; la actual seguirá en el historial.', { n: h.version, date: fmtDateTime(h.saved_at), user: h.saved_by }), () => {
               S = window.Store.normalize(h.data);
               sync.replaceAll = true;
-              persist(`Versión ${h.version} restaurada`);
-            }, 'Restaurar');
-          } catch (e) { toast(e.message, 5000); }
+              persist(t('Versión {n} restaurada', { n: h.version }));
+            }, t('Restaurar'));
+          } catch (e) { toast(t(e.message), 5000); }
         }));
       },
       onSubmit: () => {},
@@ -1999,12 +2015,12 @@
     if (!cache) return false;
     Object.assign(sync, { user: cache.user, email: cache.email || '', username, offline: true });
     useCache(cache);
-    toast('Sin conexión: trabajas con la copia de este dispositivo. Se sincronizará sola al volver la conexión.', 6000);
+    toast(t('Sin conexión: trabajas con la copia de este dispositivo. Se sincronizará sola al volver la conexión.'), 6000);
     return true;
   }
 
   async function startRemote() {
-    view.innerHTML = '<div class="empty">Conectando con el servidor…</div>';
+    view.innerHTML = `<div class="empty">${t('Conectando con el servidor…')}</div>`;
     updateSyncBadge();
     try {
       const me = await window.Remote.me();
@@ -2012,15 +2028,15 @@
       const cache = readCache(sync.username);
       if (cache && cache.pending) {
         useCache(cache);
-        queueSave('Cambios hechos sin conexión sincronizados');
+        queueSave(t('Cambios hechos sin conexión sincronizados'));
         return;
       }
       await loadFromServer();
     } catch (e) {
       if (e.status === 401) { showLogin(); return; }
       if (e.status === 0 && startOffline()) return;
-      view.innerHTML = `<div class="card"><h2>No se pudo conectar con el servidor</h2><p class="small">${esc(e.message)}</p>
-        <button class="btn primary" id="retry-connect">Reintentar</button></div>`;
+      view.innerHTML = `<div class="card"><h2>${t('No se pudo conectar con el servidor')}</h2><p class="small">${esc(t(e.message))}</p>
+        <button class="btn primary" id="retry-connect">${t('Reintentar')}</button></div>`;
       $('#retry-connect').addEventListener('click', startRemote);
     }
   }
@@ -2046,10 +2062,27 @@
     if (remote && !sync.ready) return; // pantalla de acceso o de primera carga
     const v = currentView();
     $$('.tabs button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.view === v)));
-    view.innerHTML = (S.demo ? `<div class="demo-banner" role="note"><span><b>Datos de ejemplo.</b> Explora la app con libertad; cuando quieras, empieza con los tuyos.</span>
-      <button class="btn small" data-action="start-fresh">Empezar con mis datos</button></div>` : '') + VIEWS[v]();
+    view.innerHTML = (S.demo ? `<div class="demo-banner" role="note"><span>${t('<b>Datos de ejemplo.</b> Explora la app con libertad; cuando quieras, empieza con los tuyos.')}</span>
+      <button class="btn small" data-action="start-fresh">${t('Empezar con mis datos')}</button></div>` : '') + VIEWS[v]();
     wireChart();
     if (v === 'settings') wireSettings();
+  }
+
+  // ---------------------------------------------------------------- idioma
+
+  const langSelect = (id) => `<select id="${id}" aria-label="${t('Idioma')}">${Object.entries(window.I18n.LANGS)
+    .map(([k, v]) => `<option value="${k}" lang="${k}"${k === window.I18n.lang() ? ' selected' : ''}>${v}</option>`).join('')}</select>`;
+
+  /** Textos fijos de index.html (pestañas, botones del diálogo…): llevan el español en data-i18n. */
+  function translateStatic() {
+    $$('[data-i18n]').forEach((el) => { el.textContent = t(el.dataset.i18n); });
+    $$('[data-i18n-label]').forEach((el) => { el.setAttribute('aria-label', t(el.dataset.i18nLabel)); });
+  }
+
+  function changeLang(code) {
+    window.I18n.setLang(code);
+    translateStatic();
+    updateSyncBadge();
   }
 
   function wireSettings() {
@@ -2060,21 +2093,22 @@
         if (!fd.has(k)) return;
         S.settings[k] = k === 'currency' ? fd.get(k) : num(fd.get(k));
       });
-      persist('Ajustes guardados');
+      persist(t('Ajustes guardados'));
     });
     $('#theme-select').addEventListener('change', (e) => { safeSet('daprintbox:theme', e.target.value); applyTheme(); });
+    $('#lang-select').addEventListener('change', (e) => { changeLang(e.target.value); render(); });
     $('#import-file').addEventListener('change', (e) => {
       const file = e.target.files[0];
       if (!file) return;
       file.text().then((txt) => {
         const data = JSON.parse(txt);
         if (!data || !Array.isArray(data.filaments)) throw new Error('formato');
-        askConfirm('Esto reemplazará todos los datos actuales por los de la copia. ¿Continuar?', () => {
+        askConfirm(t('Esto reemplazará todos los datos actuales por los de la copia. ¿Continuar?'), () => {
           S = window.Store.normalize(data);
           sync.replaceAll = true;
-        persist('Copia importada');
-        }, 'Importar');
-      }).catch(() => toast('El archivo no es una copia válida de Libreta Maker.'));
+          persist(t('Copia importada'));
+        }, t('Importar'));
+      }).catch(() => toast(t('El archivo no es una copia válida de Libreta Maker.')));
       e.target.value = '';
     });
   }
@@ -2088,9 +2122,9 @@
     'restock-material': (id) => restockMaterialForm(find(S.materials, id)),
     'delete-material': (id) => {
       const m = find(S.materials, id);
-      askConfirm(`¿Eliminar "${materialLabel(m)}"? Los trabajos que lo usan conservan su coste.`, () => {
+      askConfirm(t('¿Eliminar «{name}»? Los trabajos que lo usan conservan su coste.', { name: materialLabel(m) }), () => {
         S.materials = S.materials.filter((x) => x.id !== id);
-        persist('Material eliminado');
+        persist(t('Material eliminado'));
       });
     },
     'new-component': () => componentForm(),
@@ -2098,30 +2132,30 @@
     'restock-component': (id) => restockComponentForm(find(S.components, id)),
     'delete-component': (id) => {
       const c = find(S.components, id);
-      askConfirm(`¿Eliminar "${c.name}"? Las impresiones que lo usan conservan su coste.`, () => {
+      askConfirm(t('¿Eliminar «{name}»? Los trabajos que lo usan conservan su coste.', { name: c.name }), () => {
         S.components = S.components.filter((x) => x.id !== id);
-        persist('Componente eliminado');
+        persist(t('Componente eliminado'));
       });
     },
     'edit-filament': (id) => filamentForm(find(S.filaments, id)),
     'restock': (id) => restockForm(find(S.filaments, id)),
     'delete-filament': (id) => {
       const f = find(S.filaments, id);
-      askConfirm(`¿Eliminar "${f.name}"? Las impresiones y gastos registrados se conservan.`, () => {
+      askConfirm(t('¿Eliminar «{name}»? Los trabajos y gastos registrados se conservan.', { name: f.name }), () => {
         S.filaments = S.filaments.filter((x) => x.id !== id);
-        persist('Filamento eliminado');
+        persist(isResin(f) ? t('Resina eliminada') : t('Filamento eliminado'));
       });
     },
     'new-printer': () => printerForm(),
     'edit-printer': (id) => printerForm(findPrinter(id)),
-    'default-printer': (id) => { S.settings.defaultPrinterId = id; persist('Máquina predeterminada cambiada'); },
+    'default-printer': (id) => { S.settings.defaultPrinterId = id; persist(t('Máquina predeterminada cambiada')); },
     'delete-printer': (id) => {
       const pr = findPrinter(id);
       const jobs = S.prints.filter((p) => p.printerId === id).length;
-      askConfirm(`¿Eliminar "${pr.name}"?` + (jobs ? `\nSus ${jobs} trabajo(s) conservan el coste ya calculado.` : ''), () => {
+      askConfirm(t('¿Eliminar «{name}»?', { name: pr.name }) + (jobs ? '\n' + t('Sus {n} trabajo(s) conservan el coste ya calculado.', { n: jobs }) : ''), () => {
         S.printers = S.printers.filter((x) => x.id !== id);
         if (S.settings.defaultPrinterId === id) S.settings.defaultPrinterId = S.printers[0] ? S.printers[0].id : '';
-        persist('Máquina eliminada');
+        persist(t('Máquina eliminada'));
       });
     },
     'new-print': () => printForm(),
@@ -2130,29 +2164,29 @@
     'delete-print': (id) => {
       const p = find(S.prints, id);
       const linked = S.sales.filter((s) => s.printId === id).length;
-      const msg = `¿Eliminar el trabajo "${p.name}"?` + (p.stockDeducted ? '\nEl material y los componentes usados se devolverán al stock.' : '') + (linked ? `\nTiene ${linked} venta(s) asociada(s): se conservarán como ventas libres.` : '');
+      const msg = t('¿Eliminar el trabajo «{name}»?', { name: p.name }) + (p.stockDeducted ? '\n' + t('El material y los componentes usados se devolverán al stock.') : '') + (linked ? '\n' + t('Tiene {n} venta(s) asociada(s): se conservarán como ventas libres.', { n: linked }) : '');
       askConfirm(msg, () => {
         if (p.stockDeducted) applyJobStock(p, +1);
         S.sales.forEach((s) => { if (s.printId === id) { s.printId = null; s.costFromPrint = false; } });
         S.prints = S.prints.filter((x) => x.id !== id);
-        persist('Trabajo eliminado');
+        persist(t('Trabajo eliminado'));
       });
     },
     'sell-print': (id) => saleForm(null, id),
     'new-sale': () => saleForm(),
     'edit-sale': (id) => saleForm(find(S.sales, id)),
     'delete-sale': (id) => {
-      askConfirm('¿Eliminar esta venta?', () => {
+      askConfirm(t('¿Eliminar esta venta?'), () => {
         S.sales = S.sales.filter((x) => x.id !== id);
-        persist('Venta eliminada');
+        persist(t('Venta eliminada'));
       });
     },
     'new-expense': () => expenseForm(),
     'edit-expense': (id) => expenseForm(find(S.expenses, id)),
     'delete-expense': (id) => {
-      askConfirm('¿Eliminar este gasto?', () => {
+      askConfirm(t('¿Eliminar este gasto?'), () => {
         S.expenses = S.expenses.filter((x) => x.id !== id);
-        persist('Gasto eliminado');
+        persist(t('Gasto eliminado'));
       });
     },
     'export-json': () => download(`libreta-maker-copia-${today()}.json`, JSON.stringify(S, null, 2), 'application/json'),
@@ -2160,24 +2194,24 @@
     'export-csv': (id, el) => exportCSV(el.dataset.kind),
     'load-demo': () => {
       const hasData = S.printers.length || S.materials.length || S.components.length || S.filaments.length || S.prints.length || S.sales.length || S.expenses.length;
-      const load = () => { S = demoData(); sync.replaceAll = true; persist('Datos de ejemplo cargados'); };
-      if (hasData && !S.demo) askConfirm('Los datos de ejemplo reemplazarán tus datos actuales. ¿Continuar?', load, 'Cargar ejemplo');
+      const load = () => { S = demoData(); sync.replaceAll = true; persist(t('Datos de ejemplo cargados')); };
+      if (hasData && !S.demo) askConfirm(t('Los datos de ejemplo reemplazarán tus datos actuales. ¿Continuar?'), load, t('Cargar ejemplo'));
       else load();
     },
     'reset': () => {
-      askConfirm('¿Borrar TODOS los datos? Esta acción no se puede deshacer (guarda una copia antes).', () => {
+      askConfirm(t('¿Borrar TODOS los datos? Esta acción no se puede deshacer (guarda una copia antes).'), () => {
         S = window.Store.emptyState();
         sync.replaceAll = true;
-        persist('Datos borrados');
-      }, 'Borrar todo');
+        persist(t('Datos borrados'));
+      }, t('Borrar todo'));
     },
     'start-fresh': () => {
-      askConfirm('Se borrarán los datos de ejemplo para que empieces con los tuyos.', () => {
+      askConfirm(t('Se borrarán los datos de ejemplo para que empieces con los tuyos.'), () => {
         S = window.Store.emptyState();
         location.hash = 'dashboard';
         sync.replaceAll = true;
-        persist('Listo: empieza añadiendo tu impresora y tus filamentos');
-      }, 'Empezar desde cero');
+        persist(t('Listo: empieza añadiendo tus máquinas y materiales'));
+      }, t('Empezar desde cero'));
     },
     'backup-text': () => backupTextForm(),
     'install-app': async () => {
@@ -2189,26 +2223,26 @@
     },
     'history': () => historyForm(),
     'change-password': () => openModal({
-      title: 'Cambiar contraseña',
-      submitLabel: 'Cambiar contraseña',
+      title: t('Cambiar contraseña'),
+      submitLabel: t('Cambiar contraseña'),
       body: `<div class="form-grid" style="grid-template-columns:1fr">
-        ${field('Contraseña actual', '<input type="password" name="current" autocomplete="current-password" required>')}
-        ${field('Contraseña nueva', '<input type="password" name="password" autocomplete="new-password" minlength="8" required>', { hint: 'Mínimo 8 caracteres.' })}
-        ${field('Repite la contraseña nueva', '<input type="password" name="password2" autocomplete="new-password" required>')}
+        ${field(t('Contraseña actual'), '<input type="password" name="current" autocomplete="current-password" required>')}
+        ${field(t('Contraseña nueva'), '<input type="password" name="password" autocomplete="new-password" minlength="8" required>', { hint: t('Mínimo 8 caracteres.') })}
+        ${field(t('Repite la contraseña nueva'), '<input type="password" name="password2" autocomplete="new-password" required>')}
       </div>`,
       onSubmit: (b) => {
         const cur = $('[name="current"]', b).value, pw = $('[name="password"]', b).value;
-        if (pw !== $('[name="password2"]', b).value) { toast('Las dos contraseñas nuevas no coinciden.'); return false; }
-        if (pw.length < 8) { toast('La contraseña nueva debe tener al menos 8 caracteres.'); return false; }
+        if (pw !== $('[name="password2"]', b).value) { toast(t('Las dos contraseñas nuevas no coinciden.')); return false; }
+        if (pw.length < 8) { toast(t('La contraseña nueva debe tener al menos 8 caracteres.')); return false; }
         window.Remote.changePassword(cur, pw)
-          .then(() => { modal.close(); toast('Contraseña cambiada'); })
-          .catch((e) => toast(e.message, 5000));
+          .then(() => { modal.close(); toast(t('Contraseña cambiada')); })
+          .catch((e) => toast(t(e.message), 5000));
         return false;
       },
     }),
     'logout': async () => {
       if (sync.pending || sync.saving) {
-        toast(sync.offline ? 'Tienes cambios sin sincronizar: conéctate a internet antes de cerrar sesión.' : 'Espera a que se guarden los cambios antes de salir.', 5000);
+        toast(sync.offline ? t('Tienes cambios sin sincronizar: conéctate a internet antes de cerrar sesión.') : t('Espera a que se guarden los cambios antes de salir.'), 5000);
         return;
       }
       clearCache(sync.username);
@@ -2244,7 +2278,9 @@
   window.addEventListener('hashchange', () => { render(); window.scrollTo(0, 0); });
 
   applyTheme();
+  translateStatic();
   if (remote) {
+
     startRemote();
   } else {
     // Primera visita: se abre con datos de ejemplo para ver la app funcionando.

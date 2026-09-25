@@ -19,16 +19,16 @@
     <h1><img src="img/cabecera.png" alt="Libreta Maker" width="1297" height="218"></h1>
   </header>
   <div class="topbar">
-    <nav class="tabs" role="tablist" aria-label="Secciones">
-      <button role="tab" data-view="dashboard">Resumen</button>
-      <button role="tab" data-view="prints">Trabajos</button>
-      <button role="tab" data-view="sales">Ventas</button>
-      <button role="tab" data-view="expenses">Gastos</button>
-      <button role="tab" data-view="filaments">Filamento y resina</button>
-      <button role="tab" data-view="materials">Materiales</button>
-      <button role="tab" data-view="components">Componentes</button>
-      <button role="tab" data-view="printers">Máquinas</button>
-      <button role="tab" data-view="settings">Ajustes</button>
+    <nav class="tabs" role="tablist" aria-label="Secciones" data-i18n-label="Secciones">
+      <button role="tab" data-view="dashboard" data-i18n="Resumen">Resumen</button>
+      <button role="tab" data-view="prints" data-i18n="Trabajos">Trabajos</button>
+      <button role="tab" data-view="sales" data-i18n="Ventas">Ventas</button>
+      <button role="tab" data-view="expenses" data-i18n="Gastos">Gastos</button>
+      <button role="tab" data-view="filaments" data-i18n="Filamento y resina">Filamento y resina</button>
+      <button role="tab" data-view="materials" data-i18n="Materiales">Materiales</button>
+      <button role="tab" data-view="components" data-i18n="Componentes">Componentes</button>
+      <button role="tab" data-view="printers" data-i18n="Máquinas">Máquinas</button>
+      <button role="tab" data-view="settings" data-i18n="Ajustes">Ajustes</button>
     </nav>
   </div>
 
@@ -38,11 +38,11 @@
     <form method="dialog" id="modal-form" novalidate>
       <header class="modal-head">
         <h2 id="modal-title"></h2>
-        <button type="button" class="icon-btn" data-close aria-label="Cerrar">✕</button>
+        <button type="button" class="icon-btn" data-close aria-label="Cerrar" data-i18n-label="Cerrar">✕</button>
       </header>
       <div id="modal-body"></div>
       <footer class="modal-foot">
-        <button type="button" class="btn ghost" data-close>Cancelar</button>
+        <button type="button" class="btn ghost" data-close data-i18n="Cancelar">Cancelar</button>
         <button type="submit" class="btn primary" id="modal-submit">Guardar</button>
       </footer>
     </form>
@@ -51,6 +51,12 @@
   <div id="toast" role="status" aria-live="polite"></div>
 
   <script src="js/config.js"></script>
+  <script src="js/i18n/ca.js"></script>
+  <script src="js/i18n/en.js"></script>
+  <script src="js/i18n/de.js"></script>
+  <script src="js/i18n/it.js"></script>
+  <script src="js/i18n/fr.js"></script>
+  <script src="js/i18n.js"></script>
   <script src="js/calc.js"></script>
   <script src="js/store.js"></script>
   <script src="js/merge.js"></script>

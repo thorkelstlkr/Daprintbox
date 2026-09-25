@@ -5,6 +5,7 @@
   'use strict';
 
   const base = ((root.DAPRINTBOX_CONFIG || {}).apiUrl || '').trim();
+  const t = (s, p) => (root.I18n ? root.I18n.t(s, p) : s.replace(/\{(\w+)\}/g, (m, k) => (p && k in p ? p[k] : m)));
 
   async function call(action, { method = 'GET', body, params } = {}) {
     const qs = new URLSearchParams({ action, ...(params || {}) });
@@ -17,14 +18,14 @@
         body: body === undefined ? undefined : JSON.stringify(body),
       });
     } catch (e) {
-      const err = new Error('Sin conexión con el servidor.');
+      const err = new Error(t('Sin conexión con el servidor.'));
       err.status = 0;
       throw err;
     }
     let data = null;
     try { data = await res.json(); } catch (e) { /* respuesta no JSON */ }
     if (!res.ok || !data || data.ok === false) {
-      const err = new Error((data && data.error) || `Error del servidor (${res.status}).`);
+      const err = new Error((data && data.error) || t('Error del servidor ({status}).', { status: res.status }));
       err.status = res.status;
       err.data = data;
       throw err;
