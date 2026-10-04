@@ -190,6 +190,94 @@ function dpb_assign_legacy_state($db, $userId)
     return true;
 }
 
+/** Tabla de fotos: cada foto es de un usuario; la libreta solo guarda su id. Se crea sola la primera vez. */
+function dpb_photos_table($db)
+{
+    static $done = false;
+    if (!$done) {
+        $db->exec("CREATE TABLE IF NOT EXISTS dpb_photos (
+            user_id INT UNSIGNED NOT NULL,
+            id CHAR(32) NOT NULL,
+            mime VARCHAR(20) NOT NULL,
+            data MEDIUMBLOB NOT NULL,
+            thumb MEDIUMBLOB NOT NULL,
+            bytes INT UNSIGNED NOT NULL,
+            created_at DATETIME NOT NULL,
+            unused_since DATETIME NULL,
+            PRIMARY KEY (user_id, id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+        $done = true;
+    }
+}
+
+function dpb_valid_photo_id($id)
+{
+    return is_string($id) && preg_match('/^[a-f0-9]{32}$/', $id) === 1;
+}
+
+/** Ids de las fotos que usa una libreta: varias por trabajo y una por filamento, material o componente. */
+function dpb_photo_refs($data)
+{
+    $refs = array();
+    foreach (array('prints', 'filaments', 'materials', 'components') as $col) {
+        if (!is_array($data) || !isset($data[$col]) || !is_array($data[$col])) {
+            continue;
+        }
+        foreach ($data[$col] as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $ids = (isset($item['photos']) && is_array($item['photos'])) ? $item['photos'] : array();
+            if (isset($item['photo'])) {
+                $ids[] = $item['photo'];
+            }
+            foreach ($ids as $id) {
+                if (dpb_valid_photo_id($id)) {
+                    $refs[$id] = true;
+                }
+            }
+        }
+    }
+    return array_keys($refs);
+}
+
+/**
+ * Tras guardar la libreta: marca las fotos que ya no usa y borra las que llevan
+ * photo_keep_days días sin usarse (así se pueden recuperar restaurando una versión reciente).
+ */
+function dpb_photo_gc($db, $uid, $refs)
+{
+    dpb_photos_table($db);
+    $now = dpb_now();
+    if ($refs) {
+        $in = implode(',', array_fill(0, count($refs), '?'));
+        $db->prepare("UPDATE dpb_photos SET unused_since = NULL WHERE user_id = ? AND unused_since IS NOT NULL AND id IN ($in)")
+            ->execute(array_merge(array($uid), $refs));
+        $db->prepare("UPDATE dpb_photos SET unused_since = ? WHERE user_id = ? AND unused_since IS NULL AND id NOT IN ($in)")
+            ->execute(array_merge(array($now, $uid), $refs));
+    } else {
+        $db->prepare('UPDATE dpb_photos SET unused_since = ? WHERE user_id = ? AND unused_since IS NULL')->execute(array($now, $uid));
+    }
+    $days = max(1, (int) dpb_get(dpb_config(), 'photo_keep_days', 30));
+    $db->prepare('DELETE FROM dpb_photos WHERE user_id = ? AND unused_since < ?')
+        ->execute(array($uid, date('Y-m-d H:i:s', time() - $days * 86400)));
+}
+
+/** Tipo de imagen por sus primeros bytes (solo se aceptan JPEG, PNG y WebP). */
+function dpb_image_mime($bin)
+{
+    if (substr($bin, 0, 3) === "\xFF\xD8\xFF") {
+        return 'image/jpeg';
+    }
+    if (substr($bin, 0, 8) === "\x89PNG\r\n\x1a\n") {
+        return 'image/png';
+    }
+    if (substr($bin, 0, 4) === 'RIFF' && substr($bin, 8, 4) === 'WEBP') {
+        return 'image/webp';
+    }
+    return null;
+}
+
 /** Nombre de usuario válido: 2–50 letras, números, puntos, guiones o guiones bajos. */
 function dpb_valid_username($username)
 {

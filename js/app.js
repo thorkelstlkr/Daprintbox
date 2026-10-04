@@ -166,6 +166,9 @@
   let toastTimer;
   function toast(msg, ms = 2600) {
     const el = $('#toast');
+    // los diálogos abiertos tapan todo lo demás: el aviso se muestra dentro del que esté encima
+    const host = [$('#lightbox'), $('#modal')].find((d) => d && d.open) || document.body;
+    if (el.parentNode !== host) host.appendChild(el);
     el.textContent = msg;
     el.classList.add('show');
     clearTimeout(toastTimer);
@@ -220,6 +223,7 @@
     modalSubmit = onSubmit;
     if (!modal.open) modal.showModal();
     if (onOpen) onOpen($('#modal-body'));
+    Photos.hydrate($('#modal-body'));
     const first = $('#modal-body input, #modal-body select');
     if (first) first.focus();
   }
@@ -233,6 +237,7 @@
       toast(t('Completa los campos obligatorios.'));
       return;
     }
+    if (body._photosBusy) { toast(t('Espera a que se terminen de preparar las fotos.')); return; }
     if (modalSubmit && modalSubmit(body) === false) return;
     modal.close();
   });
@@ -254,6 +259,151 @@
   const numInp = (name, value, attrs = '') => inp(name, value, `type="number" step="any" inputmode="decimal" ${attrs}`);
   const val = (body, name) => { const el = body.querySelector(`[name="${name}"]`); return el ? el.value.trim() : ''; };
   const checked = (body, name) => { const el = body.querySelector(`[name="${name}"]`); return !!(el && el.checked); };
+
+  // ---------------------------------------------------------------- fotos
+
+  // Las fotos se guardan aparte (js/photos.js); las fichas solo llevan su id:
+  // varias por trabajo (photos) y una por filamento, material o componente (photo).
+  const Photos = window.Photos;
+  const printPhotos = (p) => (p && Array.isArray(p.photos) ? p.photos.filter(Boolean) : []);
+  const onePhoto = (x) => (x && x.photo ? [x.photo] : []);
+
+  /** Miniatura que abre las fotos en grande. La imagen se carga después de pintar (Photos.hydrate). */
+  function thumb(ids) {
+    if (!ids.length) return '';
+    return `<button type="button" class="ph" data-gallery="${esc(ids.join(' '))}" aria-label="${ids.length > 1 ? t('Ver fotos') : t('Ver foto')}">`
+      + `<img data-photo="${esc(ids[0])}" alt="">${ids.length > 1 ? `<span class="ph-count">${ids.length}</span>` : ''}</button>`;
+  }
+  const withThumb = (ids, html) => (ids.length ? `<div class="with-thumb">${thumb(ids)}<div>${html}</div></div>` : html);
+
+  /** Campo de fotos de un formulario: max 1 (filamentos, materiales, componentes) o varias (trabajos). */
+  function photoField(ids, max) {
+    const multi = max > 1;
+    return `<div class="field wide"><label>${multi ? t('Fotos') : t('Foto')}</label>
+      <div class="photo-field" data-max="${max}">
+        <div class="pf-list">${ids.map(pfItem).join('')}</div>
+        <label class="btn small pf-add"><span></span><input type="file" accept="image/*"${multi ? ' multiple' : ''} hidden></label>
+      </div>
+      <span class="hint">${multi ? t('Haz fotos con el móvil o elígelas de la galería. La primera es la principal.') : t('Haz una foto con el móvil o elígela de la galería.')}</span></div>`;
+  }
+  const pfItem = (id) => `<div class="pf-item" data-id="${esc(id)}">
+      <button type="button" class="ph pf-view" aria-label="${t('Ver foto')}"><img data-photo="${esc(id)}" alt=""></button>
+      <button type="button" class="pf-btn pf-main" title="${t('Usar como foto principal')}" aria-label="${t('Usar como foto principal')}">★</button>
+      <button type="button" class="pf-btn pf-remove" title="${t('Quitar foto')}" aria-label="${t('Quitar foto')}">✕</button></div>`;
+
+  /** Activa el campo de fotos del formulario; devuelve una función que da los ids en orden. */
+  function wirePhotoField(b) {
+    const box = $('.photo-field', b);
+    if (!box) return () => [];
+    const max = Number(box.dataset.max) || 1;
+    const list = $('.pf-list', box), input = $('input[type="file"]', box), add = $('.pf-add', box), label = $('span', add);
+    const ids = () => $$('.pf-item', list).map((el) => el.dataset.id);
+    const busy = () => b._photosBusy > 0;
+    const refresh = () => {
+      label.textContent = busy() ? t('Preparando foto…') : max === 1 && ids().length ? t('📷 Cambiar foto') : t('📷 Añadir foto');
+      add.classList.toggle('busy', busy());
+      add.hidden = max > 1 && ids().length >= max;
+    };
+    input.addEventListener('change', async () => {
+      const files = Array.from(input.files || []);
+      input.value = '';
+      if (!files.length) return;
+      const room = max === 1 ? 1 : max - ids().length;
+      if (max > 1 && files.length > room) toast(t('Máximo {n} fotos por trabajo.', { n: max }));
+      b._photosBusy = (b._photosBusy || 0) + 1;
+      refresh();
+      try {
+        for (const f of files.slice(0, room)) {
+          const id = await Photos.fromFile(f);
+          if (max === 1) list.innerHTML = '';
+          list.insertAdjacentHTML('beforeend', pfItem(id));
+          Photos.hydrate(list);
+        }
+      } catch (e) {
+        toast(e.message, 5000);
+      } finally {
+        b._photosBusy -= 1;
+        refresh();
+      }
+    });
+    list.addEventListener('click', (e) => {
+      const item = e.target.closest('.pf-item');
+      if (!item) return;
+      if (e.target.closest('.pf-remove')) item.remove();
+      else if (e.target.closest('.pf-main')) list.prepend(item);
+      else if (e.target.closest('.pf-view')) showLightbox(ids(), ids().indexOf(item.dataset.id));
+      refresh();
+    });
+    refresh();
+    return ids;
+  }
+
+  // Visor de fotos a pantalla completa
+  const lightbox = $('#lightbox');
+  const lb = { ids: [], i: 0 };
+  function drawLightbox() {
+    const img = $('img', lightbox), id = lb.ids[lb.i];
+    img.removeAttribute('src');
+    // primero la miniatura (ya está cargada) y después la foto grande
+    Photos.src(id, 'thumb').then((u) => { if (u && lb.ids[lb.i] === id && !img.getAttribute('src')) img.src = u; });
+    Photos.src(id, 'full').then((u) => { if (u && lb.ids[lb.i] === id) img.src = u; });
+    $('.lb-count', lightbox).textContent = lb.ids.length > 1 ? `${lb.i + 1} / ${lb.ids.length}` : '';
+    $$('.lb-prev, .lb-next', lightbox).forEach((el) => { el.hidden = lb.ids.length < 2; });
+  }
+  function showLightbox(ids, i = 0) {
+    lb.ids = ids; lb.i = Math.max(0, i);
+    drawLightbox();
+    if (!lightbox.open) lightbox.showModal();
+  }
+  const lbMove = (d) => { if (lb.ids.length > 1) { lb.i = (lb.i + d + lb.ids.length) % lb.ids.length; drawLightbox(); } };
+  lightbox.addEventListener('click', (e) => {
+    if (e.target.closest('.lb-prev')) lbMove(-1);
+    else if (e.target.closest('.lb-next')) lbMove(1);
+    else if (e.target.closest('.lb-close') || e.target === lightbox) lightbox.close();
+  });
+  lightbox.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowLeft') lbMove(-1);
+    if (e.key === 'ArrowRight') lbMove(1);
+  });
+  let touchX = null;
+  lightbox.addEventListener('touchstart', (e) => { touchX = e.touches[0].clientX; }, { passive: true });
+  lightbox.addEventListener('touchend', (e) => {
+    if (touchX === null) return;
+    const dx = e.changedTouches[0].clientX - touchX;
+    touchX = null;
+    if (Math.abs(dx) > 50) lbMove(dx < 0 ? 1 : -1);
+  });
+  document.addEventListener('click', (e) => {
+    const g = e.target.closest('[data-gallery]');
+    if (g) showLightbox(g.dataset.gallery.split(' '));
+  });
+
+  /** Todas las fotos de la libreta en un .zip, en carpetas por sección y con el nombre de cada ficha. */
+  async function exportPhotos() {
+    const clean = (x) => String(x || '').replace(/[\\/:*?"<>|\u0000-\u001f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80) || t('Sin nombre');
+    const entries = [];
+    S.prints.forEach((p) => {
+      const ids = printPhotos(p);
+      ids.forEach((id, i) => entries.push({ id, name: `${t('Trabajos')}/${p.date ? p.date + ' ' : ''}${clean(p.name)}${ids.length > 1 ? ` (${i + 1})` : ''}` }));
+    });
+    [[S.filaments, t('Filamento y resina'), (f) => f.name], [S.materials, t('Materiales'), materialLabel], [S.components, t('Componentes'), (c) => c.name]]
+      .forEach(([list, folder, name]) => list.forEach((x) => { if (x.photo) entries.push({ id: x.photo, name: `${folder}/${clean(name(x))}` }); }));
+    if (!entries.length) { toast(t('Todavía no hay fotos.')); return; }
+    const used = new Set(), files = [];
+    let missing = 0;
+    for (const [i, e] of entries.entries()) {
+      toast(t('Preparando fotos… {i}/{n}', { i: i + 1, n: entries.length }), 60000);
+      const b = await Photos.blob(e.id, 'full');
+      if (!b) { missing++; continue; }
+      let name = e.name, n = 2;
+      while (used.has(name)) name = `${e.name} (${n++})`;
+      used.add(name);
+      files.push({ name: name + '.jpg', data: new Uint8Array(await b.arrayBuffer()) });
+    }
+    if (!files.length) { toast(t('No se pudieron obtener las fotos. Revisa la conexión.'), 5000); return; }
+    download(`libreta-maker-fotos-${today()}.zip`, new Blob([Photos.makeZip(files)], { type: 'application/zip' }), 'application/zip');
+    if (missing) toast(t('{n} fotos no se pudieron incluir (sin conexión o ya no existen).', { n: missing }), 6000);
+  }
 
   // ================================================================ RESUMEN
 
@@ -363,7 +513,7 @@
         ${unsold.length ? `<p class="small muted">${t('{n} unidades · coste inmovilizado {v}', { n: fmtNum(unsold.reduce((s, x) => s + x.left, 0)), v: money(unsoldValue) })}</p>
           <div class="table-wrap"><table>
           <thead><tr><th>${t('Pieza')}</th><th>${t('Fecha')}</th><th class="num">${t('Disponibles')}</th><th class="num">${t('Coste ud.')}</th><th class="num">${t('Precio sugerido')}</th><th></th></tr></thead>
-          <tbody>${unsold.map(({ p, left }) => `<tr><td>${esc(p.name)}</td><td class="nowrap">${fmtDate(p.date)}</td><td class="num">${fmtNum(left)}</td>
+          <tbody>${unsold.map(({ p, left }) => `<tr><td>${withThumb(printPhotos(p), esc(p.name))}</td><td class="nowrap">${fmtDate(p.date)}</td><td class="num">${fmtNum(left)}</td>
             <td class="num">${money(p.cost && p.cost.unit)}</td><td class="num">${money(p.cost && p.cost.suggestedUnitPrice)}</td>
             <td class="actions"><button class="btn small" data-action="sell-print" data-id="${p.id}">${t('Vender')}</button></td></tr>`).join('')}</tbody>
           </table></div>` : `<p class="muted">${t('No hay piezas en inventario.')}</p>`}
@@ -480,8 +630,8 @@
             const pct = num(f.spoolWeight) > 0 ? Math.max(0, Math.min(100, (num(f.remaining) / num(f.spoolWeight)) * 100)) : 0;
             const low = isLow(f);
             return `<tr>
-              <td><span class="swatch" style="background:${esc(f.color || '#999')}"></span><b>${esc(f.name)}</b>
-                <div class="small muted">${esc([isResin(f) ? t('Resina') : t('Filamento'), f.material, f.colorName, !isResin(f) && f.diameter ? f.diameter + ' mm' : ''].filter(Boolean).join(' · '))}</div></td>
+              <td>${withThumb(onePhoto(f), `<span class="swatch" style="background:${esc(f.color || '#999')}"></span><b>${esc(f.name)}</b>
+                <div class="small muted">${esc([isResin(f) ? t('Resina') : t('Filamento'), f.material, f.colorName, !isResin(f) && f.diameter ? f.diameter + ' mm' : ''].filter(Boolean).join(' · '))}</div>`)}</td>
               <td>${esc(f.brand || '')}</td>
               <td class="num">${money(f.price)}<div class="small muted">${t(isResin(f) ? 'envase de {q}' : 'bobina de {q}', { q: fmtAmount(f.spoolWeight, unitOf(f)) })}</div></td>
               <td class="num">${money(costPerGram(f) * 1000)}<div class="small muted">${unitOf(f) === 'ml' ? t('por litro') : t('por kg')}</div></td>
@@ -524,8 +674,10 @@
         ${field('<span data-lbl="low"></span>', numInp('lowStock', f.lowStock, `placeholder="${S.settings.lowStockGrams}"`), { hint: t('Vacío = valor de Ajustes.') })}
         ${isNew ? `${field(t('Fecha de compra'), `<input type="date" name="date" value="${today()}">`)}
           <div class="field wide"><label class="check"><input type="checkbox" name="asExpense" checked> ${t('Registrar la compra como gasto')}</label></div>` : ''}
+        ${photoField(onePhoto(f), 1)}
       </div>`,
       onOpen: (b) => {
+        b._photos = wirePhotoField(b);
         const update = () => {
           const r = val(b, 'kind') === 'resina';
           const u = r ? val(b, 'unit') : 'g';
@@ -557,6 +709,7 @@
           name: val(b, 'name'), material: val(b, 'material'), brand: val(b, 'brand'), color: val(b, 'color'),
           colorName: val(b, 'colorName'), diameter: kind === 'resina' ? '' : val(b, 'diameter'),
           spoolWeight: num(val(b, 'spoolWeight')), price: num(val(b, 'price')), lowStock: val(b, 'lowStock'),
+          photo: b._photos()[0] || '',
         };
         if (data.spoolWeight <= 0) { toast(kind === 'resina' ? t('El contenido del envase debe ser mayor que 0.') : t('El peso de la bobina debe ser mayor que 0.')); return false; }
         if (isNew) {
@@ -628,7 +781,7 @@
         ${list.length ? `<div class="table-wrap"><table>
           <thead><tr><th>${t('Material')}</th><th class="num">${t('Plancha')}</th><th class="num">${t('Precio')}</th><th class="num">€/cm²</th><th class="num">${t('Stock')}</th><th class="num">${t('Usado')}</th><th class="num">${t('Valor')}</th><th></th></tr></thead>
           <tbody>${list.map((m) => `<tr>
-            <td><b>${esc(materialLabel(m))}</b><div class="small muted">${esc([m.category, m.supplier].filter(Boolean).join(' · '))}</div></td>
+            <td>${withThumb(onePhoto(m), `<b>${esc(materialLabel(m))}</b><div class="small muted">${esc([m.category, m.supplier].filter(Boolean).join(' · '))}</div>`)}</td>
             <td class="num">${fmtNum(m.sheetWidth)} × ${fmtNum(m.sheetHeight)} mm</td>
             <td class="num">${money(m.price)}</td>
             <td class="num"><b>${money(sheetCostPerCm2(m) * 100).replace(/\s?€/, '')}</b><div class="small muted">€ / 100 cm²</div></td>
@@ -664,9 +817,11 @@
         ${field(t('Proveedor'), inp('supplier', m.supplier))}
         ${isNew ? `${field(t('Fecha de compra'), `<input type="date" name="date" value="${today()}">`)}
           <div class="field wide"><label class="check"><input type="checkbox" name="asExpense" checked> ${t('Registrar la compra como gasto')}</label></div>` : ''}
+        ${photoField(onePhoto(m), 1)}
       </div>
       <div class="price-box" id="mat-preview"></div>`,
       onOpen: (b) => {
+        b._photos = wirePhotoField(b);
         const refresh = () => {
           const x = { price: val(b, 'price'), sheetWidth: val(b, 'sheetWidth'), sheetHeight: val(b, 'sheetHeight') };
           const cm2 = sheetCostPerCm2(x);
@@ -680,7 +835,7 @@
         const data = {
           name: val(b, 'name'), category: val(b, 'category'), thickness: num(val(b, 'thickness')),
           sheetWidth: num(val(b, 'sheetWidth')), sheetHeight: num(val(b, 'sheetHeight')), price: num(val(b, 'price')),
-          lowStock: val(b, 'lowStock'), supplier: val(b, 'supplier'),
+          lowStock: val(b, 'lowStock'), supplier: val(b, 'supplier'), photo: b._photos()[0] || '',
         };
         if (data.sheetWidth <= 0 || data.sheetHeight <= 0) { toast(t('Indica las medidas de la plancha.')); return false; }
         if (isNew) {
@@ -744,7 +899,7 @@
         ${list.length ? `<div class="table-wrap"><table>
           <thead><tr><th>${t('Componente')}</th><th>${t('Proveedor')}</th><th class="num">${t('Precio paquete')}</th><th class="num">${t('Coste ud.')}</th><th class="num">${t('Stock')}</th><th class="num">${t('Usados')}</th><th class="num">${t('Valor')}</th><th></th></tr></thead>
           <tbody>${list.map((c) => `<tr>
-            <td><b>${esc(c.name)}</b><div class="small muted">${esc(c.category || '')}</div></td>
+            <td>${withThumb(onePhoto(c), `<b>${esc(c.name)}</b><div class="small muted">${esc(c.category || '')}</div>`)}</td>
             <td>${esc(c.supplier || '')}</td>
             <td class="num">${money(c.price)}<div class="small muted">${fmtQty(c.packUnits || 1, c.unit)}</div></td>
             <td class="num"><b>${money(componentUnitCost(c))}</b><div class="small muted">${t('por {u}', { u: esc(unitLabel(c.unit)) })}</div></td>
@@ -779,9 +934,11 @@
         ${field(t('Proveedor'), inp('supplier', c.supplier, 'placeholder="AliExpress, Amazon…"'))}
         ${isNew ? `${field(t('Fecha de compra'), `<input type="date" name="date" value="${today()}">`)}
           <div class="field wide"><label class="check"><input type="checkbox" name="asExpense" checked> ${t('Registrar la compra como gasto')}</label></div>` : ''}
+        ${photoField(onePhoto(c), 1)}
       </div>
       <div class="price-box" id="comp-preview"></div>`,
       onOpen: (b) => {
+        b._photos = wirePhotoField(b);
         const refresh = () => {
           const unitCost = componentUnitCost({ price: val(b, 'price'), packUnits: val(b, 'packUnits') });
           $('#comp-preview', b).innerHTML = `<div><div class="small muted">${t('Coste por {u}', { u: esc(unitLabel(val(b, 'unit'))) })}</div><strong>${money(unitCost)}</strong></div>`;
@@ -793,6 +950,7 @@
         const data = {
           name: val(b, 'name'), category: val(b, 'category'), unit: !val(b, 'unit') || val(b, 'unit') === t('ud.') ? 'ud.' : val(b, 'unit'), price: num(val(b, 'price')),
           packUnits: num(val(b, 'packUnits')), lowStock: val(b, 'lowStock'), supplier: val(b, 'supplier'),
+          photo: b._photos()[0] || '',
         };
         if (data.packUnits <= 0) { toast(t('Las unidades por paquete deben ser mayores que 0.')); return false; }
         if (isNew) {
@@ -968,7 +1126,7 @@
             const s = num(sold[p.id]);
             return `<tr>
               <td class="nowrap">${fmtDate(p.date)}</td>
-              <td><span class="badge kind-${k}">${t(KIND_SHORT[k])}</span> <b>${esc(p.name)}</b>${fileLink(p.fileUrl)}<div class="small muted">${esc([p.printerName, (p.items || []).map((it) => it.filamentName).join(', '), (p.sheets || []).map((it) => it.materialName).join(', '), (p.components || []).map((it) => `${fmtNum(it.qty, 2)}× ${it.componentName}`).join(', ')].filter(Boolean).join(' · '))}</div></td>
+              <td>${withThumb(printPhotos(p), `<span class="badge kind-${k}">${t(KIND_SHORT[k])}</span> <b>${esc(p.name)}</b>${fileLink(p.fileUrl)}<div class="small muted">${esc([p.printerName, (p.items || []).map((it) => it.filamentName).join(', '), (p.sheets || []).map((it) => it.materialName).join(', '), (p.components || []).map((it) => `${fmtNum(it.qty, 2)}× ${it.componentName}`).join(', ')].filter(Boolean).join(' · '))}</div>`)}</td>
               <td class="num">${fmtNum(p.quantity)}</td>
               <td class="num">${[g ? fmtGrams(g) : '', ml ? fmtMl(ml) : '', cm2 ? fmtNum(cm2) + ' cm²' : ''].filter(Boolean).join('<br>') || '—'}</td>
               <td class="num">${fmtHours(p.hours)}</td>
@@ -1066,6 +1224,7 @@
       submitLabel: quoteOnly ? t('Guardar como trabajo') : t('Guardar'),
       body: `<div class="form-grid">
           ${field(t('Pieza / encargo *'), inp('name', p.name, `required placeholder="${t('Ej. Soporte móvil, Sello logo, Posavasos…')}"`), { wide: true })}
+          ${photoField(printPhotos(p), 12)}
           ${field(t('Enlace al archivo'), inp('fileUrl', p.fileUrl, 'type="url" inputmode="url" autocapitalize="none" spellcheck="false" placeholder="https://www.printables.com/model/…"'), { wide: true, hint: t('De dónde sacaste el archivo: Printables, Thingiverse, MakerWorld, Cults…') })}
           ${field(t('Tipo de trabajo'), `<select name="kind">${Object.entries(KINDS).map(([k, v]) => `<option value="${k}"${k === (p.kind || '3d') ? ' selected' : ''}>${t(v)}</option>`).join('')}</select>`)}
           ${printerField}
@@ -1101,6 +1260,7 @@
         </div>
         <div class="card" style="margin:16px 0 0" id="preview"></div>`,
       onOpen: (b) => {
+        b._photos = wirePhotoField(b);
         const kindSel = $('[name="kind"]', b);
         const machineSel = $('[name="printerId"]', b);
         let sheetsTouched = !isNew;
@@ -1235,7 +1395,7 @@
         if (!job.items.length && !job.sheets.length && !job.components.length && !job.hours) { toast(t('Indica el material usado o el tiempo de máquina.')); return false; }
         const pr = findPrinter(job.printerId);
         const cost = printCost(job, filamentsById(), S.settings, pr, componentsById(), materialsById());
-        const data = { ...job, printerName: pr ? pr.name : '', name: val(b, 'name'), fileUrl: normalizeUrl(val(b, 'fileUrl')), date: val(b, 'date') || today(), notes: val(b, 'notes'), cost };
+        const data = { ...job, printerName: pr ? pr.name : '', name: val(b, 'name'), fileUrl: normalizeUrl(val(b, 'fileUrl')), photos: b._photos(), date: val(b, 'date') || today(), notes: val(b, 'notes'), cost };
         if (isNew) {
           const deduct = checked(b, 'deduct');
           if (deduct) applyJobStock(data, -1);
@@ -1277,7 +1437,7 @@
             const tt = saleTotals(s);
             return `<tr>
               <td class="nowrap">${fmtDate(s.date)}</td>
-              <td><b>${esc(s.description)}</b><div class="small muted">${esc([s.customer, s.channel].filter(Boolean).join(' · '))}</div></td>
+              <td>${withThumb(printPhotos(s.printId && S.prints.find((p) => p.id === s.printId)), `<b>${esc(s.description)}</b><div class="small muted">${esc([s.customer, s.channel].filter(Boolean).join(' · '))}</div>`)}</td>
               <td class="num">${fmtNum(s.quantity)}</td>
               <td class="num">${money(s.unitPrice)}</td>
               <td class="num">${money(tt.revenue)}</td>
@@ -1480,11 +1640,12 @@
 
       <div class="card">
         <h2>${t('Datos')}</h2>
-        <p class="small muted">${remote ? t('Además del historial del servidor, puedes guardar tus propias copias.') : t('Los datos se guardan en este navegador.')} ${t('Guarda una copia de seguridad a menudo para no perderlos o para pasarlos a otro dispositivo. Si los botones de descarga no hacen nada (algunos visores web los bloquean), usa «Copia en texto».')}</p>
+        <p class="small muted">${remote ? t('Además del historial del servidor, puedes guardar tus propias copias.') : t('Los datos se guardan en este navegador.')} ${t('Guarda una copia de seguridad a menudo para no perderlos o para pasarlos a otro dispositivo. Si los botones de descarga no hacen nada (algunos visores web los bloquean), usa «Copia en texto».')} ${t('Las copias no incluyen las fotos: descárgalas aparte con «Descargar fotos».')}</p>
         <div class="filters">
           <button class="btn" data-action="backup-text">${t('Copia en texto (copiar / pegar)')}</button>
           <button class="btn" data-action="export-json">${t('⬇ Exportar copia (JSON)')}</button>
           <button class="btn" data-action="import-json">${t('⬆ Importar copia')}</button>
+          <button class="btn" data-action="export-photos">${t('⬇ Descargar fotos (ZIP)')}</button>
           <button class="btn" data-action="export-csv" data-kind="sales">${t('Ventas CSV')}</button>
           <button class="btn" data-action="export-csv" data-kind="expenses">${t('Gastos CSV')}</button>
           <button class="btn" data-action="export-csv" data-kind="filaments">${t('Filamento y resina CSV')}</button>
@@ -1775,6 +1936,7 @@
   /** Sube los cambios pendientes o, si no hay, comprueba si otro dispositivo guardó algo. */
   async function pollRemote() {
     if (!remote || !sync.ready || !sync.user || sync.saving || modal.open || document.hidden) return;
+    Photos.upload();
     if (sync.pending) { queueSave(); return; }
     try {
       const r = await window.Remote.load(sync.version);
@@ -1799,12 +1961,16 @@
       $('.topbar').appendChild(el);
     }
     if (!sync.user) { el.innerHTML = ''; return; }
+    const photos = Photos.pending();
     const [cls, label] = sync.saving ? ['saving', t('Guardando…')]
-      : sync.pending && sync.offline ? ['offline', t('Sin conexión · guardado en este dispositivo')]
+      : (sync.pending || photos) && sync.offline ? ['offline', t('Sin conexión · guardado en este dispositivo')]
       : sync.pending && sync.error ? ['error', t('Sin guardar')]
       : sync.pending ? ['saving', t('Pendiente')]
       : sync.offline ? ['offline', t('Sin conexión')]
+      : photos && Photos.error() ? ['error', t('Fotos sin subir ({n})', { n: photos })]
+      : photos ? ['saving', t('Subiendo fotos ({n})…', { n: photos })]
       : ['ok', t('Guardado')];
+    el.title = photos && Photos.error() ? t(Photos.error()) : '';
     el.innerHTML = `<span class="dot ${cls}" aria-hidden="true"></span><span>${label}</span><span class="muted">· ${esc(sync.user)}</span>
       ${sync.pending && !sync.saving && sync.error ? `<button class="btn small" id="retry-save">${t('Reintentar')}</button>` : ''}`;
     const retry = $('#retry-save');
@@ -2074,13 +2240,23 @@
   const VIEWS = { dashboard: viewDashboard, filaments: viewFilaments, materials: viewMaterials, components: viewComponents, printers: viewPrinters, prints: viewPrints, sales: viewSales, expenses: viewExpenses, settings: viewSettings };
   const currentView = () => { const v = location.hash.slice(1); return VIEWS[v] ? v : 'dashboard'; };
 
+  let photosCleaned = false;
+
   function render() {
     if (remote && !sync.ready) return; // pantalla de acceso o de primera carga
+    if (remote) Photos.setScope(sync.username, window.Remote);
     const v = currentView();
     $$('.tabs button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.view === v)));
     view.innerHTML = (S.demo ? `<div class="demo-banner" role="note"><span>${t('<b>Datos de ejemplo.</b> Explora la app con libertad; cuando quieras, empieza con los tuyos.')}</span>
       <button class="btn small" data-action="start-fresh">${t('Empezar con mis datos')}</button></div>` : '') + VIEWS[v]();
     wireChart();
+    Photos.hydrate(view);
+    if (!photosCleaned) {
+      // una vez por sesión: se borran del dispositivo las fotos que la libreta ya no usa
+      photosCleaned = true;
+      setTimeout(() => Photos.gc(Photos.refsOf(S)), 5000);
+    }
+
     if (v === 'settings') wireSettings();
   }
 
@@ -2230,6 +2406,7 @@
       }, t('Empezar desde cero'));
     },
     'backup-text': () => backupTextForm(),
+    'export-photos': () => exportPhotos(),
     'install-app': async () => {
       if (!pwa.prompt) return;
       pwa.prompt.prompt();
@@ -2257,11 +2434,12 @@
       },
     }),
     'logout': async () => {
-      if (sync.pending || sync.saving) {
-        toast(sync.offline ? t('Tienes cambios sin sincronizar: conéctate a internet antes de cerrar sesión.') : t('Espera a que se guarden los cambios antes de salir.'), 5000);
+      if (sync.pending || sync.saving || Photos.pending()) {
+        toast(sync.offline || !navigator.onLine ? t('Tienes cambios sin sincronizar: conéctate a internet antes de cerrar sesión.') : t('Espera a que se guarden los cambios antes de salir.'), 5000);
         return;
       }
       clearCache(sync.username);
+      await Photos.clear();
       try { await window.Remote.logout(); } catch (e) { /* la sesión ya no existe */ }
       if (window.google && window.google.accounts) window.google.accounts.id.disableAutoSelect();
       Object.assign(sync, { user: null, username: '', email: '', ready: false, version: 0, base: null, offline: false });
@@ -2296,7 +2474,7 @@
   applyTheme();
   translateStatic();
   if (remote) {
-
+    Photos.onChange(updateSyncBadge);
     startRemote();
   } else {
     // Primera visita: se abre con datos de ejemplo para ver la app funcionando.
@@ -2304,6 +2482,7 @@
       S = demoData();
       window.Store.save(S);
     }
+    Photos.setScope('local', null);
     render();
   }
 })();

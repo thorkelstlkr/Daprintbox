@@ -24,7 +24,7 @@ Apunta el nombre de la base de datos, el usuario, la contraseña y el servidor (
 
 Sube el contenido de `libreta-maker-servidor.zip` a una carpeta de tu web, por ejemplo `public_html/libreta-maker/`. Lo más fácil es subir el zip desde el administrador de archivos del panel y usar «Extraer».
 
-> ¿Ya la tenías instalada? Sube los archivos nuevos encima, **conservando tu `api/config.php`**, y sigue en el paso 4: las tablas se actualizan solas y podrás asignar la libreta que ya teníais a un usuario.
+> ¿Ya la tenías instalada? Sube los archivos nuevos encima, **conservando tu `api/config.php`**, y sigue en el paso 4: las tablas se actualizan solas y podrás asignar la libreta que ya teníais a un usuario. (La tabla de fotos se crea sola la primera vez que alguien sube una foto.)
 
 Debe quedar así:
 
@@ -127,6 +127,23 @@ Las actualizaciones llegan solas: cuando subas una versión nueva al servidor, l
 - **Historial de versiones** (*Ajustes → Tu cuenta*): cada guardado crea una versión (se guardan las últimas 200 de cada usuario). Si algo se borra por error, restaura una versión anterior.
 - La sesión dura 30 días en cada navegador.
 
+## Fotos
+
+Los trabajos pueden llevar varias fotos y los filamentos, materiales y componentes, una cada uno. Se añaden desde el formulario de cada ficha con **📷 Añadir foto**: en el móvil deja hacerla con la cámara o elegirla de la galería.
+
+- **Se reducen en el propio móvil** antes de subirlas (unos 0,2–0,3 MB cada una, más una miniatura), así que suben rápido y ocupan poco. Al reducirlas se pierden los datos ocultos de la foto, como la ubicación.
+- **No van dentro de la libreta**, sino en la tabla `dpb_photos` de MySQL; la libreta solo guarda qué foto lleva cada ficha. Cada usuario solo puede ver las suyas.
+- **Sin conexión** también se pueden añadir: se guardan en el móvil y se suben solas al volver internet (arriba verás «Subiendo fotos…»).
+- **Fotos quitadas**: se guardan 30 días más por si restauras una versión anterior de la libreta, y luego se borran solas.
+- **Límite**: 300 MB de fotos por usuario (más de 1.000 fotos). Se puede cambiar en `config.php`:
+
+  ```php
+  'max_photos_mb' => 300,    // 0 = sin límite
+  'photo_keep_days' => 30,   // días que se guarda una foto quitada
+  ```
+
+En `setup.php` verás cuántas fotos tiene cada usuario y cuánto ocupan. Al eliminar un usuario se borran también sus fotos.
+
 ## Opcional: entrar también con Google
 
 Si quieres que se pueda entrar con una cuenta de Google (cada cuenta de Google tendrá también su propia libreta):
@@ -146,8 +163,8 @@ Si quieres que se pueda entrar con una cuenta de Google (cada cuenta de Google t
 
 Además del historial, conviene hacer de vez en cuando una copia completa:
 
-- Cada usuario, desde la app: *Ajustes → Exportar copia (JSON)*.
-- Desde el panel del hosting: exportar la base de datos con phpMyAdmin (incluye las libretas de todos).
+- Cada usuario, desde la app: *Ajustes → Exportar copia (JSON)* para los datos y *Descargar fotos (ZIP)* para las fotos (la copia JSON no las incluye).
+- Desde el panel del hosting: exportar la base de datos con phpMyAdmin (incluye las libretas y las fotos de todos; con muchas fotos tarda más y el archivo es más grande).
 
 ## Problemas frecuentes
 
@@ -160,6 +177,8 @@ Además del historial, conviene hacer de vez en cuando una copia completa:
 | «Ese nombre de usuario ya existe» | Elige otro nombre, o cámbiale la contraseña a ese usuario en `setup.php`. |
 | Alguien olvidó su contraseña | En `setup.php`, «Crear usuario o cambiar su contraseña» con su mismo nombre de usuario. |
 | setup.php dice que la clave no coincide aunque la copias de config.php | Pon `'setup_sin_clave' => true,` en `config.php`, termina la instalación y vuelve a ponerlo en `false`. |
+| «Has llegado al límite de espacio para fotos» | Sube `max_photos_mb` en `config.php` o pide a esa persona que quite fotos que ya no necesite. |
+| Las fotos no suben y el servidor da error 500 | Algunos hostings limitan el tamaño de cada consulta a MySQL (`max_allowed_packet`); con fotos de ~0,3 MB no suele pasar. Mira el registro de errores del hosting. |
 | «Demasiados intentos» | Tras 10 intentos fallidos desde la misma conexión hay que esperar 15 minutos. |
 | La app no pide usuario y guarda en el navegador | `js/config.js` debe tener `apiUrl: 'api/api.php'`. |
 | El botón de Google da error «origin_mismatch» | En Google Cloud, añade la dirección exacta de tu web en «Orígenes de JavaScript autorizados». |

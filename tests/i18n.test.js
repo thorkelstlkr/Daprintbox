@@ -23,6 +23,7 @@ function sourceKeys() {
   const add = (re, text) => { for (const m of text.matchAll(re)) keys.add(unescape(m[1])); };
   add(/\b(?:t|N_)\(\s*'((?:[^'\\]|\\.)*)'/g, read('js/app.js'));
   add(/\bt\(\s*'((?:[^'\\]|\\.)*)'/g, read('js/remote.js'));
+  add(/\bt\(\s*'((?:[^'\\]|\\.)*)'/g, read('js/photos.js'));
   add(/data-i18n(?:-label)?="([^"]+)"/g, read('index.html'));
   // mensajes de error que envía el servidor
   add(/(?:dpb_fail\(\d+,\s*|failed_attempt\(\$db,\s*)'((?:[^'\\]|\\.)*)'/g, read('api/api.php'));

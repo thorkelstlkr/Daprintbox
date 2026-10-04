@@ -245,6 +245,53 @@ dialog::backdrop { background: rgba(0, 0, 0, .45); }
 }
 #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
+/* ---------- Fotos ---------- */
+.ph {
+  position: relative; display: inline-flex; align-items: center; justify-content: center; flex: none;
+  width: 48px; height: 48px; padding: 0; border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
+  background: var(--surface-2); cursor: zoom-in;
+}
+.ph::before { content: "📷"; font-size: 1.1rem; opacity: .45; }
+.ph img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.ph img:not([src]) { visibility: hidden; }
+.ph.missing::before { content: "📷?"; font-size: .8rem; }
+.ph-count {
+  position: absolute; right: 2px; bottom: 2px; min-width: 18px; padding: 0 4px; border-radius: 9px;
+  background: rgba(0, 0, 0, .65); color: #fff; font-size: .7rem; font-weight: 700; line-height: 18px; text-align: center;
+}
+.with-thumb { display: flex; align-items: flex-start; gap: 10px; }
+.with-thumb > div { min-width: 0; }
+.photo-field { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.pf-list { display: contents; }
+.pf-item { position: relative; }
+.pf-item .ph { width: 88px; height: 88px; }
+.pf-btn {
+  position: absolute; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 50%;
+  background: rgba(0, 0, 0, .6); color: #fff; font-size: .8rem; line-height: 26px; cursor: pointer;
+}
+.pf-remove { top: -6px; right: -6px; }
+.pf-main { bottom: 4px; left: 4px; }
+.pf-item:first-child .pf-main, .photo-field[data-max="1"] .pf-main { display: none; }
+.photo-field[data-max]:not([data-max="1"]) .pf-item:first-child .ph { outline: 2px solid var(--accent); outline-offset: 1px; }
+.pf-add { cursor: pointer; }
+.pf-add.busy { opacity: .7; pointer-events: none; }
+.lightbox {
+  width: 100vw; height: 100dvh; max-width: none; max-height: none; margin: 0; border: 0; border-radius: 0;
+  background: rgba(0, 0, 0, .92); color: #fff;
+}
+.lightbox[open] { display: flex; align-items: center; justify-content: center; }
+.lightbox img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.lb-btn {
+  position: absolute; width: 44px; height: 44px; border: 0; border-radius: 50%;
+  background: rgba(255, 255, 255, .15); color: #fff; font-size: 1.6rem; line-height: 1; cursor: pointer;
+}
+.lb-btn:hover { background: rgba(255, 255, 255, .28); }
+.lb-close { top: 12px; right: 12px; font-size: 1.1rem; }
+.lb-prev { left: 12px; top: 50%; transform: translateY(-50%); }
+.lb-next { right: 12px; top: 50%; transform: translateY(-50%); }
+.lb-count { position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%); font-size: .9rem; padding: 2px 10px; border-radius: 999px; background: rgba(0, 0, 0, .55); }
+.lb-count:empty { display: none; }
+
 .muted { color: var(--muted); }
 .small { font-size: .85rem; }
 .nowrap { white-space: nowrap; }

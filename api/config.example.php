@@ -51,4 +51,10 @@ return array(
 
     // Duración de la sesión iniciada (días).
     'session_days' => 30,
+
+    // Espacio máximo para las fotos de cada usuario (MB; 0 = sin límite). Cada foto ocupa unos 0,3 MB.
+    'max_photos_mb' => 300,
+
+    // Días que se guarda una foto quitada de la libreta (por si restauras una versión anterior).
+    'photo_keep_days' => 30,
 );

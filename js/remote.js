@@ -7,7 +7,7 @@
   const base = ((root.DAPRINTBOX_CONFIG || {}).apiUrl || '').trim();
   const t = (s, p) => (root.I18n ? root.I18n.t(s, p) : s.replace(/\{(\w+)\}/g, (m, k) => (p && k in p ? p[k] : m)));
 
-  async function call(action, { method = 'GET', body, params } = {}) {
+  async function call(action, { method = 'GET', body, params, raw = false } = {}) {
     const qs = new URLSearchParams({ action, ...(params || {}) });
     const headers = { 'X-Daprintbox': '1' };
     if (body !== undefined) headers['Content-Type'] = 'application/json';
@@ -22,6 +22,7 @@
       err.status = 0;
       throw err;
     }
+    if (raw && res.ok) return res.blob();
     let data = null;
     try { data = await res.json(); } catch (e) { /* respuesta no JSON */ }
     if (!res.ok || !data || data.ok === false) {
@@ -46,5 +47,8 @@
     save: (data, baseVersion) => call('save', { method: 'POST', body: { data, baseVersion } }),
     history: () => call('history'),
     historyGet: (version) => call('history_get', { params: { version } }),
+    photoUpload: (id, data, thumb) => call('photo_upload', { method: 'POST', body: { id, data, thumb } }),
+    /** Devuelve la foto como Blob (size: 'thumb' para la miniatura). */
+    photoGet: (id, size) => call('photo', { params: size === 'thumb' ? { id, size } : { id }, raw: true }),
   };
 })(window);

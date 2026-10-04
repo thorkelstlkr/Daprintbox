@@ -15,6 +15,8 @@
  *   POST save                 {data, baseVersion} → 409 si se guardó antes desde otro dispositivo
  *   GET  history              → últimas versiones guardadas de la libreta del usuario
  *   GET  history_get&version=N
+ *   POST photo_upload         {id, data, thumb} (JPEG/PNG/WebP en base64, ya reducidas en el navegador)
+ *   GET  photo&id=X[&size=thumb] → la imagen (solo las fotos del propio usuario)
  */
 require __DIR__ . '/lib.php';
 
@@ -300,6 +302,7 @@ switch ($action) {
         $keep = max(1, (int) dpb_get(dpb_config(), 'history_keep', 200));
         $db->prepare('DELETE FROM dpb_history WHERE user_id = ? AND version <= ?')->execute(array($uid, $version - $keep));
         $db->commit();
+        dpb_photo_gc($db, $uid, dpb_photo_refs($in['data']));
         dpb_json(array('ok' => true, 'version' => $version, 'updated_at' => $now, 'updated_by' => $user));
         break;
 
@@ -324,6 +327,66 @@ switch ($action) {
         }
         dpb_json(array('ok' => true, 'version' => (int) $row['version'], 'saved_at' => $row['saved_at'], 'saved_by' => $row['saved_by'], 'data' => decode_data($row['data'])));
         break;
+
+    case 'photo_upload':
+        require_post($method);
+        $uid = require_uid();
+        $in = body();
+        $id = (string) dpb_get($in, 'id', '');
+        if (!dpb_valid_photo_id($id)) {
+            dpb_fail(400, 'Faltan datos.');
+        }
+        $data = base64_decode((string) dpb_get($in, 'data', ''), true);
+        $thumb = base64_decode((string) dpb_get($in, 'thumb', ''), true);
+        $mime = $data === false ? null : dpb_image_mime($data);
+        if ($mime === null || $thumb === false || dpb_image_mime($thumb) === null) {
+            dpb_fail(415, 'El archivo no es una imagen válida.');
+        }
+        if (strlen($data) > 4 * 1024 * 1024 || strlen($thumb) > 512 * 1024) {
+            dpb_fail(413, 'La foto es demasiado grande.');
+        }
+        dpb_photos_table($db);
+        $q = $db->prepare('SELECT COUNT(*) FROM dpb_photos WHERE user_id = ? AND id = ?');
+        $q->execute(array($uid, $id));
+        if ((int) $q->fetchColumn() > 0) {
+            dpb_json(array('ok' => true, 'id' => $id)); // ya estaba subida (reintento)
+        }
+        $q = $db->prepare('SELECT COALESCE(SUM(bytes), 0) FROM dpb_photos WHERE user_id = ?');
+        $q->execute(array($uid));
+        $limit = (float) dpb_get(dpb_config(), 'max_photos_mb', 300) * 1024 * 1024;
+        if ($limit > 0 && (int) $q->fetchColumn() + strlen($data) + strlen($thumb) > $limit) {
+            dpb_fail(413, 'Has llegado al límite de espacio para fotos. Borra alguna o pide más espacio al administrador.');
+        }
+        // Si la libreta ya la usa (se guardó antes de subir la foto), no se marca como sin usar
+        $row = user_state($db, $uid);
+        $used = in_array($id, dpb_photo_refs(decode_data($row['data'])), true);
+        $db->prepare('INSERT INTO dpb_photos (user_id, id, mime, data, thumb, bytes, created_at, unused_since) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+            ->execute(array($uid, $id, $mime, $data, $thumb, strlen($data) + strlen($thumb), dpb_now(), $used ? null : dpb_now()));
+        dpb_json(array('ok' => true, 'id' => $id));
+        break;
+
+    case 'photo':
+        $uid = require_uid();
+        $id = (string) dpb_get($_GET, 'id', '');
+        if (!dpb_valid_photo_id($id)) {
+            dpb_fail(404, 'Esa foto no existe.');
+        }
+        dpb_photos_table($db);
+        $col = dpb_get($_GET, 'size') === 'thumb' ? 'thumb' : 'data';
+        $q = $db->prepare("SELECT mime, $col AS bin FROM dpb_photos WHERE user_id = ? AND id = ?");
+        $q->execute(array($uid, $id));
+        $row = $q->fetch();
+        if (!$row) {
+            dpb_fail(404, 'Esa foto no existe.');
+        }
+        $bin = $row['bin'];
+        $mime = dpb_image_mime($bin);
+        header('Content-Type: ' . ($mime ? $mime : 'application/octet-stream'));
+        header('Content-Length: ' . strlen($bin));
+        header('Cache-Control: private, max-age=31536000, immutable');
+        header('X-Content-Type-Options: nosniff');
+        echo $bin;
+        exit;
 
     default:
         dpb_fail(404, 'Acción desconocida.');

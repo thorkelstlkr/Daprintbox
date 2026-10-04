@@ -99,6 +99,7 @@ if ($keyProblem !== '') {
 
         $db = dpb_db();
         dpb_install($db);
+        dpb_photos_table($db);
         $checks[] = array(true, 'Base de datos y tablas', '');
 
         $op = (string) dpb_get($_POST, 'op', '');
@@ -126,10 +127,11 @@ if ($keyProblem !== '') {
             $q->execute(array($username));
             $id = $q->fetchColumn();
             if ($id) {
+                $db->prepare('DELETE FROM dpb_photos WHERE user_id = ?')->execute(array($id));
                 $db->prepare('DELETE FROM dpb_history WHERE user_id = ?')->execute(array($id));
                 $db->prepare('DELETE FROM dpb_user_state WHERE user_id = ?')->execute(array($id));
                 $db->prepare('DELETE FROM dpb_users WHERE id = ?')->execute(array($id));
-                $messages[] = "Usuario «{$username}» y su libreta eliminados.";
+                $messages[] = "Usuario «{$username}», su libreta y sus fotos eliminados.";
             }
         } elseif ($op === 'assign_legacy') {
             $q = $db->prepare('SELECT id FROM dpb_users WHERE username = ?');
@@ -143,7 +145,9 @@ if ($keyProblem !== '') {
             }
         }
         $users = $db->query('SELECT u.username, u.email, u.password_hash IS NOT NULL AS has_password, u.created_at, u.last_login_at,
-            s.version, LENGTH(s.data) AS bytes
+            s.version, LENGTH(s.data) AS bytes,
+            (SELECT COUNT(*) FROM dpb_photos p WHERE p.user_id = u.id) AS photos,
+            (SELECT COALESCE(SUM(p.bytes), 0) FROM dpb_photos p WHERE p.user_id = u.id) AS photo_bytes
             FROM dpb_users u LEFT JOIN dpb_user_state s ON s.user_id = u.id ORDER BY u.username')->fetchAll();
         $legacy = dpb_legacy_state($db);
     }
@@ -186,7 +190,7 @@ function hidden_key($key)
 <body>
 <main>
   <h1>Instalación de Libreta Maker</h1>
-  <p class="muted">Versión del instalador: 2026-09-25b</p>
+  <p class="muted">Versión del instalador: 2026-10-04</p>
   <?php if (!empty($openSetup)): ?><p class="bad"><b>⚠ Instalador abierto sin clave</b> (<code>'setup_sin_clave' => true</code> en config.php). Cuando termines, cámbialo a <code>false</code> o borra esa línea: mientras esté así, cualquiera que conozca esta dirección podría gestionar los usuarios.</p><?php endif; ?>
   <?php foreach ($messages as $m): ?><p class="ok">✓ <?php echo h($m); ?></p><?php endforeach; ?>
   <?php foreach ($errors as $e): ?><p class="bad">⚠ <?php echo h($e); ?></p><?php endforeach; ?>
@@ -234,15 +238,16 @@ function hidden_key($key)
     <h2>Usuarios y sus libretas</h2>
     <?php if (!$users): ?><p class="muted">Todavía no hay usuarios.</p><?php else: ?>
     <table>
-      <tr><th>Usuario</th><th>Libreta</th><th>Último acceso</th><th></th></tr>
+      <tr><th>Usuario</th><th>Libreta</th><th>Fotos</th><th>Último acceso</th><th></th></tr>
       <?php foreach ($users as $u): ?>
       <tr>
         <td><b><?php echo h($u['username']); ?></b><?php if (!$u['has_password']): ?> <span class="muted">(Google)</span><?php endif; ?>
           <div class="muted">desde <?php echo h(substr($u['created_at'], 0, 10)); ?></div></td>
         <td><?php echo $u['bytes'] ? h(number_format($u['bytes'] / 1024, 1, ',', '.')) . ' KB · v' . (int) $u['version'] : '<span class="muted">vacía</span>'; ?></td>
+        <td><?php echo $u['photos'] ? (int) $u['photos'] . ' · ' . h(number_format($u['photo_bytes'] / 1048576, 1, ',', '.')) . ' MB' : '<span class="muted">—</span>'; ?></td>
         <td><?php echo $u['last_login_at'] ? h(substr($u['last_login_at'], 0, 16)) : '<span class="muted">nunca</span>'; ?></td>
         <td style="text-align:right">
-          <form method="post" onsubmit="return confirm('¿Eliminar este usuario y TODA su libreta? No se puede deshacer.')">
+          <form method="post" onsubmit="return confirm('¿Eliminar este usuario, TODA su libreta y sus fotos? No se puede deshacer.')">
             <?php echo hidden_key($key); ?>
             <input type="hidden" name="op" value="delete_user">
             <input type="hidden" name="username" value="<?php echo h($u['username']); ?>">
