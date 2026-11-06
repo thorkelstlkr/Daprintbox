@@ -348,3 +348,8 @@ textarea { resize: vertical; }
 .login-lang { display: flex; justify-content: center; margin-top: 12px; }
 .login-lang .field { min-width: 180px; }
 @media (max-width: 640px) { .sync { white-space: normal; } }
+
+/* ---------- Agentes de IA ---------- */
+.copy-row { display: flex; gap: 8px; margin: 6px 0 10px; }
+.copy-row input { flex: 1; min-width: 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .8rem; }
+#modal-body ol li { margin: 3px 0; }

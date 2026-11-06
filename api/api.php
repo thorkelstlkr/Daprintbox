@@ -17,6 +17,9 @@
  *   GET  history_get&version=N
  *   POST photo_upload         {id, data, thumb} (JPEG/PNG/WebP en base64, ya reducidas en el navegador)
  *   GET  photo&id=X[&size=thumb] → la imagen (solo las fotos del propio usuario)
+ *   GET  tokens               → accesos del usuario para agentes de IA (MCP, ver mcp.php)
+ *   POST token_create         {name, write} → crea un acceso; el token solo se devuelve esta vez
+ *   POST token_delete         {id}
  */
 require __DIR__ . '/lib.php';
 
@@ -128,6 +131,7 @@ if ($action === 'auth_config') {
         'registration' => registration_enabled(),
         'registration_code' => registration_enabled() && (string) dpb_get(dpb_config(), 'registration_code', '') !== '',
         'google_client_id' => in_array('google', $methods, true) ? (string) dpb_get(dpb_config(), 'google_client_id', '') : '',
+        'mcp' => dpb_mcp_enabled(),
     ));
 }
 
@@ -387,6 +391,51 @@ switch ($action) {
         header('X-Content-Type-Options: nosniff');
         echo $bin;
         exit;
+
+    case 'tokens':
+        $uid = require_uid();
+        dpb_tokens_table($db);
+        $q = $db->prepare('SELECT id, name, hint, can_write, created_at, last_used_at FROM dpb_tokens WHERE user_id = ? ORDER BY created_at DESC');
+        $q->execute(array($uid));
+        $list = array();
+        foreach ($q->fetchAll() as $r) {
+            $list[] = array('id' => (int) $r['id'], 'name' => $r['name'], 'hint' => $r['hint'], 'write' => (bool) $r['can_write'],
+                'created_at' => $r['created_at'], 'last_used_at' => $r['last_used_at']);
+        }
+        dpb_json(array('ok' => true, 'enabled' => dpb_mcp_enabled(), 'tokens' => $list));
+        break;
+
+    case 'token_create':
+        require_post($method);
+        $uid = require_uid();
+        if (!dpb_mcp_enabled()) {
+            dpb_fail(403, 'El acceso para agentes de IA está desactivado en este servidor.');
+        }
+        $in = body();
+        $name = dpb_mb_cut(trim((string) dpb_get($in, 'name', '')), 100);
+        if ($name === '') {
+            dpb_fail(400, 'Ponle un nombre al acceso, por ejemplo «Claude».');
+        }
+        dpb_tokens_table($db);
+        $q = $db->prepare('SELECT COUNT(*) FROM dpb_tokens WHERE user_id = ?');
+        $q->execute(array($uid));
+        if ((int) $q->fetchColumn() >= 20) {
+            dpb_fail(400, 'Tienes demasiados accesos. Revoca alguno que ya no uses.');
+        }
+        $token = 'lm_' . dpb_random_hex(20);
+        $db->prepare('INSERT INTO dpb_tokens (user_id, name, token_hash, hint, can_write, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+            ->execute(array($uid, $name, hash('sha256', $token), substr($token, -4), dpb_get($in, 'write') ? 1 : 0, dpb_now()));
+        dpb_json(array('ok' => true, 'id' => (int) $db->lastInsertId(), 'token' => $token));
+        break;
+
+    case 'token_delete':
+        require_post($method);
+        $uid = require_uid();
+        $in = body();
+        dpb_tokens_table($db);
+        $db->prepare('DELETE FROM dpb_tokens WHERE id = ? AND user_id = ?')->execute(array((int) dpb_get($in, 'id', 0), $uid));
+        dpb_json(array('ok' => true));
+        break;
 
     default:
         dpb_fail(404, 'Acción desconocida.');

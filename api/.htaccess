@@ -1,8 +1,8 @@
 # Libreta Maker · protección de la carpeta de la API (Apache / LiteSpeed)
 Options -Indexes
 
-# config.php (contraseñas) y lib.php nunca se sirven directamente
-<FilesMatch "^(config\.php|config\.example\.php|lib\.php)$">
+# config.php (contraseñas) y las librerías nunca se sirven directamente
+<FilesMatch "^(config\.php|config\.example\.php|lib\.php|calc\.php|mcp_tools\.php)$">
     <IfModule mod_authz_core.c>
         Require all denied
     </IfModule>
@@ -11,3 +11,9 @@ Options -Indexes
         Deny from all
     </IfModule>
 </FilesMatch>
+
+# Algunos hostings (PHP como CGI/FastCGI) no pasan a PHP la cabecera Authorization, que usan
+# los agentes de IA para el servidor MCP (mcp.php). Así llega siempre.
+<IfModule mod_setenvif.c>
+    SetEnvIf Authorization "(.+)" HTTP_AUTHORIZATION=$1
+</IfModule>

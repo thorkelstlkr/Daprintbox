@@ -263,6 +263,84 @@ function dpb_photo_gc($db, $uid, $refs)
         ->execute(array($uid, date('Y-m-d H:i:s', time() - $days * 86400)));
 }
 
+/** Accesos para agentes de IA (MCP): cada usuario crea los suyos; solo se guarda el hash del token. */
+function dpb_tokens_table($db)
+{
+    static $done = false;
+    if (!$done) {
+        $db->exec("CREATE TABLE IF NOT EXISTS dpb_tokens (
+            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            user_id INT UNSIGNED NOT NULL,
+            name VARCHAR(100) NOT NULL,
+            token_hash CHAR(64) NOT NULL UNIQUE,
+            hint VARCHAR(12) NOT NULL,
+            can_write TINYINT(1) NOT NULL DEFAULT 0,
+            created_at DATETIME NOT NULL,
+            last_used_at DATETIME NULL,
+            INDEX dpb_tokens_user (user_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+        $done = true;
+    }
+}
+
+function dpb_random_hex($bytes)
+{
+    if (function_exists('random_bytes')) {
+        return bin2hex(random_bytes($bytes)); // phpcs:ignore PHPCompatibility.FunctionUse.NewFunctions.random_bytesFound -- solo si existe (PHP 7+)
+    }
+    $strong = false;
+    $raw = function_exists('openssl_random_pseudo_bytes') ? openssl_random_pseudo_bytes($bytes, $strong) : false;
+    if ($raw === false || !$strong) {
+        dpb_fail(500, 'El servidor no puede generar claves seguras (falta openssl).');
+    }
+    return bin2hex($raw);
+}
+
+function dpb_mcp_enabled()
+{
+    return (bool) dpb_get(dpb_config(), 'mcp_enabled', true);
+}
+
+/**
+ * Guarda la libreta de un usuario como una versión nueva (con su historial) desde el servidor,
+ * por ejemplo desde un agente. $change recibe el estado y lo modifica; si devuelve false no se guarda.
+ * Devuelve array(resultado de $change, versión nueva o null).
+ */
+function dpb_change_state($db, $uid, $savedBy, $change)
+{
+    $db->prepare('INSERT IGNORE INTO dpb_user_state (user_id, data, version) VALUES (?, NULL, 0)')->execute(array($uid));
+    $db->beginTransaction();
+    try {
+        $q = $db->prepare('SELECT data, version FROM dpb_user_state WHERE user_id = ? FOR UPDATE');
+        $q->execute(array($uid));
+        $row = $q->fetch();
+        $data = $row['data'] === null ? null : json_decode($row['data'], true);
+        $result = call_user_func_array($change, array(&$data));
+        if ($result === false || !is_array($data)) {
+            $db->rollBack();
+            return array($result, null);
+        }
+        $json = json_encode($data, JSON_UNESCAPED_UNICODE);
+        $version = (int) $row['version'] + 1;
+        $now = dpb_now();
+        $by = dpb_mb_cut($savedBy, 100);
+        $db->prepare('UPDATE dpb_user_state SET data = ?, version = ?, updated_at = ?, updated_by = ? WHERE user_id = ?')
+            ->execute(array($json, $version, $now, $by, $uid));
+        $db->prepare('INSERT INTO dpb_history (user_id, version, data, saved_at, saved_by) VALUES (?, ?, ?, ?, ?)')
+            ->execute(array($uid, $version, $json, $now, $by));
+        $keep = max(1, (int) dpb_get(dpb_config(), 'history_keep', 200));
+        $db->prepare('DELETE FROM dpb_history WHERE user_id = ? AND version <= ?')->execute(array($uid, $version - $keep));
+        $db->commit();
+    } catch (Exception $e) {
+        if ($db->inTransaction()) {
+            $db->rollBack();
+        }
+        throw $e;
+    }
+    dpb_photo_gc($db, $uid, dpb_photo_refs($data));
+    return array($result, $version);
+}
+
 /** Tipo de imagen por sus primeros bytes (solo se aceptan JPEG, PNG y WebP). */
 function dpb_image_mime($bin)
 {

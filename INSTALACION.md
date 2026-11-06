@@ -39,7 +39,8 @@ libreta-maker/
 ├── js/                    (config.js ya apunta a api/api.php)
 └── api/
     ├── api.php
-    ├── lib.php
+    ├── mcp.php            (servidor para agentes de IA)
+    ├── mcp_tools.php, calc.php, lib.php
     ├── setup.php
     ├── config.example.php
     └── .htaccess
@@ -144,6 +145,26 @@ Los trabajos pueden llevar varias fotos y los filamentos, materiales y component
 
 En `setup.php` verás cuántas fotos tiene cada usuario y cuánto ocupan. Al eliminar un usuario se borran también sus fotos.
 
+## Usar la libreta con un agente de IA (MCP)
+
+Cada usuario puede conectar **Claude**, ChatGPT u otro asistente compatible con MCP a su libreta y usarla hablando: «¿cuánto PLA negro me queda?», «¿cuánto me cuesta imprimir esto en 3 horas con 120 g?», «apunta que he vendido 2 llaveros a Marta por 4 € cada uno». El asistente usa las mismas cuentas que la app: los costes salen iguales, descuenta el stock y cada cambio queda en el historial de versiones.
+
+No hay que instalar nada más: viene en `api/mcp.php` y se activa solo.
+
+1. En la app, *Ajustes → Agentes de IA → Nuevo acceso*. Ponle un nombre (por ejemplo «Claude») y elige si puede **hacer cambios** o solo **consultar**.
+2. La app te muestra la clave **una sola vez**, con lo que hay que pegar en cada asistente:
+   - **Claude** (web, escritorio y móvil): *Configuración → Conectores → Añadir conector personalizado*, nombre «Libreta Maker» y la dirección que termina en `?token=lm_…`. En el chat, activa el conector desde el botón de herramientas.
+   - **Claude Code**: el comando `claude mcp add …` que te da la app.
+   - **Otros** (ChatGPT en modo desarrollador, Cursor…): la misma dirección o, si permiten cabeceras, `…/api/mcp.php` con `Authorization: Bearer lm_…`.
+3. Para quitarle el acceso, *Revocar* en la misma tarjeta: deja de funcionar al momento.
+
+Qué puede hacer el asistente: ver el resumen económico, el stock, los trabajos, las ventas, los gastos y las fotos; calcular el coste de un trabajo sin guardarlo; y, con un acceso con cambios, registrar trabajos, ventas y gastos, reponer stock, crear o editar fichas, cambiar los ajustes y eliminar. No puede añadir fotos.
+
+- Los cambios del asistente aparecen en el historial como *tu usuario · nombre del acceso* (por ejemplo «kike · Claude»); si algo sale mal, restaura la versión anterior. Las demás pantallas abiertas se actualizan solas.
+- El asistente necesita que el servidor sea accesible desde internet con **HTTPS** (Claude se conecta desde sus servidores, no desde tu móvil).
+- La dirección con `?token=` lleva la clave: no la compartas. Si alguna app no acepta esa dirección, prueba con la clave en la ruta: `…/api/mcp.php/lm_…`.
+- Para desactivarlo en todo el servidor: `'mcp_enabled' => false,` en `config.php`. «Hoy» se calcula con `'timezone' => 'Europe/Madrid'` (cámbialo si hace falta).
+
 ## Opcional: entrar también con Google
 
 Si quieres que se pueda entrar con una cuenta de Google (cada cuenta de Google tendrá también su propia libreta):
@@ -179,6 +200,8 @@ Además del historial, conviene hacer de vez en cuando una copia completa:
 | setup.php dice que la clave no coincide aunque la copias de config.php | Pon `'setup_sin_clave' => true,` en `config.php`, termina la instalación y vuelve a ponerlo en `false`. |
 | «Has llegado al límite de espacio para fotos» | Sube `max_photos_mb` en `config.php` o pide a esa persona que quite fotos que ya no necesite. |
 | Las fotos no suben y el servidor da error 500 | Algunos hostings limitan el tamaño de cada consulta a MySQL (`max_allowed_packet`); con fotos de ~0,3 MB no suele pasar. Mira el registro de errores del hosting. |
+| El asistente no conecta con el servidor | Comprueba que la dirección empieza por `https://` y se abre desde fuera de tu red. Abierta en el navegador, `…/api/mcp.php` debe mostrar «Servidor MCP de Libreta Maker». Si la clave era errónea, crea un acceso nuevo. |
+| «Token de acceso no válido o revocado» | Se revocó el acceso o la dirección se copió incompleta: crea un acceso nuevo en *Ajustes → Agentes de IA*. |
 | «Demasiados intentos» | Tras 10 intentos fallidos desde la misma conexión hay que esperar 15 minutos. |
 | La app no pide usuario y guarda en el navegador | `js/config.js` debe tener `apiUrl: 'api/api.php'`. |
 | El botón de Google da error «origin_mismatch» | En Google Cloud, añade la dirección exacta de tu web en «Orígenes de JavaScript autorizados». |

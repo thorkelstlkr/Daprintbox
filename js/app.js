@@ -1636,6 +1636,13 @@
           <button class="btn" data-action="logout">${t('Cerrar sesión')}</button>
         </div>
         <p class="small muted" style="margin-bottom:0"><a href="condiciones.html" target="_blank" rel="noopener">${t('Condiciones de uso')}</a> · <a href="privacidad.html" target="_blank" rel="noopener">${t('Privacidad')}</a> · ${t('Para borrar tu cuenta, escribe al administrador indicando tu usuario.')}</p>
+      </div>
+      <div class="card" id="mcp-card" hidden>
+        <h2>${t('Agentes de IA')}</h2>
+        <p class="small">${t('Conecta Claude, ChatGPT u otro asistente compatible con MCP a tu libreta: podrás preguntarle por tu stock, tus costes y tus ventas, y pedirle que apunte trabajos, ventas o gastos hablando con él.')}</p>
+        <div id="mcp-tokens"></div>
+        <div class="filters"><button class="btn primary" data-action="mcp-new">${t('+ Nuevo acceso')}</button></div>
+        <p class="small muted" style="margin-bottom:0">${t('Cada acceso es una clave para un asistente. Si ya no lo usas o se te escapa la clave, revócalo: deja de funcionar al momento. Los cambios que haga quedan en el historial de versiones con el nombre del acceso.')}</p>
       </div>` : ''}
 
       <div class="card">
@@ -1943,7 +1950,9 @@
       if (sync.offline) { sync.offline = false; updateSyncBadge(); }
       if (r.unchanged || sync.pending || sync.saving || modal.open) return;
       applyRemote(r);
-      toast(t('Libreta actualizada con los cambios hechos en otro dispositivo.'), 4000);
+      // los agentes de IA guardan como «usuario · nombre del acceso»
+      const agent = String(r.updated_by || '').split(' · ').slice(1).join(' · ');
+      toast(agent ? t('Libreta actualizada con los cambios de {who}.', { who: agent }) : t('Libreta actualizada con los cambios hechos en otro dispositivo.'), 4000);
     } catch (e) {
       if (e.status === 401) showLogin(t('Tu sesión ha caducado. Vuelve a entrar.'));
       else if (e.status === 0 && !sync.offline) { sync.offline = true; updateSyncBadge(); }
@@ -2240,6 +2249,83 @@
   const VIEWS = { dashboard: viewDashboard, filaments: viewFilaments, materials: viewMaterials, components: viewComponents, printers: viewPrinters, prints: viewPrints, sales: viewSales, expenses: viewExpenses, settings: viewSettings };
   const currentView = () => { const v = location.hash.slice(1); return VIEWS[v] ? v : 'dashboard'; };
 
+  // ---------------------------------------------------------------- agentes de IA (MCP)
+
+  const mcpUrl = () => new URL('api/mcp.php', location.href).href;
+
+  /** Rellena la tarjeta de Ajustes con los accesos del usuario (solo si el servidor tiene MCP activado). */
+  async function loadAgentTokens() {
+    const card = $('#mcp-card');
+    if (!card) return;
+    let r;
+    try { r = await window.Remote.tokens(); } catch (e) { return; }
+    if (!r.enabled || !$('#mcp-card')) return;
+    card.hidden = false;
+    $('#mcp-tokens').innerHTML = r.tokens.length ? `<ul class="alert-list">${r.tokens.map((tk) => `<li>
+        <span><b>${esc(tk.name)}</b> <span class="badge${tk.write ? ' ok' : ''}">${tk.write ? t('Puede hacer cambios') : t('Solo consulta')}</span>
+          <span class="small muted" style="display:block">${t('Creado el {date}', { date: esc(fmtDateTime(tk.created_at)) })} · ${tk.last_used_at ? t('último uso: {date}', { date: esc(fmtDateTime(tk.last_used_at)) }) : t('sin usar todavía')} · …${esc(tk.hint)}</span></span>
+        <button class="btn small danger" data-action="mcp-revoke" data-id="${tk.id}" data-name="${esc(tk.name)}">${t('Revocar')}</button></li>`).join('')}</ul>`
+      : `<p class="small muted">${t('Todavía no has conectado ningún asistente.')}</p>`;
+  }
+
+  function newAgentForm() {
+    openModal({
+      title: t('Nuevo acceso para un asistente'),
+      submitLabel: t('Crear acceso'),
+      body: `<div class="form-grid" style="grid-template-columns:1fr">
+        ${field(t('Nombre del acceso'), inp('name', 'Claude', 'required maxlength="100"'), { hint: t('Para reconocerlo luego: «Claude», «ChatGPT del móvil»…') })}
+        <div class="field"><label class="check"><input type="checkbox" name="write" checked> ${t('Permitir que haga cambios (registrar trabajos, ventas y gastos, reponer stock…)')}</label>
+          <span class="hint">${t('Sin esta opción solo podrá consultar y calcular costes.')}</span></div>
+      </div>`,
+      onSubmit: (b) => {
+        window.Remote.tokenCreate(val(b, 'name'), checked(b, 'write'))
+          .then((r) => { showAgentToken(r.token, val(b, 'name')); loadAgentTokens(); })
+          .catch((e) => toast(t(e.message), 5000));
+        return false;
+      },
+    });
+  }
+
+  /** La clave recién creada, con cómo conectar cada asistente (solo se muestra esta vez). */
+  function showAgentToken(token, name) {
+    const base = mcpUrl();
+    const withToken = `${base}?token=${token}`;
+    const cmd = `claude mcp add --transport http libreta-maker ${base} --header "Authorization: Bearer ${token}"`;
+    const copyRow = (value, label) => `<div class="copy-row"><input readonly value="${esc(value)}" aria-label="${esc(label)}" spellcheck="false">
+      <button type="button" class="btn small" data-copy>${t('Copiar')}</button></div>`;
+    openModal({
+      title: t('Acceso «{name}» creado', { name }),
+      submitLabel: t('Hecho'),
+      hideCancel: true,
+      body: `<p class="small neg">${t('Copia ahora lo que necesites: por seguridad, la clave no se vuelve a mostrar. Si la pierdes, crea otro acceso.')}</p>
+        <h3 class="section-title">${t('Claude (web, app de escritorio y móvil)')}</h3>
+        <ol class="small" style="margin:0 0 8px;padding-left:20px">
+          <li>${t('En Claude, abre <b>Configuración → Conectores</b> y pulsa <b>Añadir conector personalizado</b>.')}</li>
+          <li>${t('Ponle de nombre <b>Libreta Maker</b>, pega esta dirección y pulsa <b>Añadir</b>:')}</li>
+        </ol>
+        ${copyRow(withToken, t('Dirección del conector'))}
+        <p class="small muted">${t('En el chat, activa el conector en el botón de herramientas y pregunta, por ejemplo: «¿Qué filamento me queda?» o «Apunta que he vendido 2 llaveros a 4 €».')}</p>
+        <h3 class="section-title">${t('Claude Code')}</h3>
+        ${copyRow(cmd, t('Comando'))}
+        <h3 class="section-title">${t('Otros asistentes (ChatGPT, Cursor…)')}</h3>
+        <p class="small">${t('Usa la dirección de arriba o, si el asistente permite cabeceras, esta dirección y la cabecera <code>Authorization: Bearer</code> con la clave:')}</p>
+        ${copyRow(base, t('Dirección del servidor'))}
+        ${copyRow(token, t('Clave'))}
+        <p class="small muted">${t('La dirección con la clave da acceso a tu libreta: no la compartas.')}</p>`,
+      onOpen: (b) => {
+        b.addEventListener('click', (e) => {
+          const btn = e.target.closest('[data-copy]');
+          if (!btn) return;
+          const input = btn.previousElementSibling;
+          const done = () => toast(t('Copiado'));
+          const fallback = () => { input.focus(); input.select(); toast(t('Texto seleccionado: cópialo con Ctrl+C / Cmd+C')); };
+          try { navigator.clipboard.writeText(input.value).then(done, fallback); } catch (err) { fallback(); }
+        });
+      },
+      onSubmit: () => {},
+    });
+  }
+
   let photosCleaned = false;
 
   function render() {
@@ -2289,6 +2375,7 @@
     });
     $('#theme-select').addEventListener('change', (e) => { safeSet('daprintbox:theme', e.target.value); applyTheme(); });
     $('#lang-select').addEventListener('change', (e) => { changeLang(e.target.value); render(); });
+    if (remote) loadAgentTokens();
     $('#import-file').addEventListener('change', (e) => {
       const file = e.target.files[0];
       if (!file) return;
@@ -2415,6 +2502,10 @@
       render();
     },
     'history': () => historyForm(),
+    'mcp-new': () => newAgentForm(),
+    'mcp-revoke': (id, el) => askConfirm(t('¿Revocar el acceso «{name}»? El asistente que lo use dejará de poder entrar en tu libreta.', { name: el.dataset.name }), () => {
+      window.Remote.tokenDelete(Number(id)).then(() => { toast(t('Acceso revocado')); loadAgentTokens(); }, (e) => toast(t(e.message), 5000));
+    }, t('Revocar')),
     'change-password': () => openModal({
       title: t('Cambiar contraseña'),
       submitLabel: t('Cambiar contraseña'),

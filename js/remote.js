@@ -47,6 +47,9 @@
     save: (data, baseVersion) => call('save', { method: 'POST', body: { data, baseVersion } }),
     history: () => call('history'),
     historyGet: (version) => call('history_get', { params: { version } }),
+    tokens: () => call('tokens'),
+    tokenCreate: (name, write) => call('token_create', { method: 'POST', body: { name, write } }),
+    tokenDelete: (id) => call('token_delete', { method: 'POST', body: { id } }),
     photoUpload: (id, data, thumb) => call('photo_upload', { method: 'POST', body: { id, data, thumb } }),
     /** Devuelve la foto como Blob (size: 'thumb' para la miniatura). */
     photoGet: (id, size) => call('photo', { params: size === 'thumb' ? { id, size } : { id }, raw: true }),

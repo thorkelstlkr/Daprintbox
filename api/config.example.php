@@ -57,4 +57,11 @@ return array(
 
     // Días que se guarda una foto quitada de la libreta (por si restauras una versión anterior).
     'photo_keep_days' => 30,
+
+    // Agentes de IA (MCP): cada usuario puede conectar Claude u otro asistente a su libreta con un
+    // acceso que crea en la app (Ajustes → Agentes de IA). Pon false para desactivarlo en todo el servidor.
+    'mcp_enabled' => true,
+
+    // Zona horaria para «hoy» en lo que apuntan los agentes.
+    'timezone' => 'Europe/Madrid',
 );

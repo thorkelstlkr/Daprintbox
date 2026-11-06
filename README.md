@@ -11,6 +11,7 @@ Aplicación web para gestionar un pequeño taller de **impresión 3D, corte y gr
 - **Gastos** — compras de filamento (se añaden solas al comprar/reponer), repuestos, embalaje, etc.
 - **Resumen** — ingresos, beneficio de las ventas, gastos pagados, resultado de caja, gráfico mensual de ingresos vs. gastos, resultados por línea de negocio (3D, láser, sellos), piezas más rentables y piezas fabricadas pendientes de vender.
 - **Fotos** — varias por trabajo y una por filamento, material o componente, hechas con el móvil o elegidas de la galería. Se reducen en el dispositivo, funcionan sin conexión y se pueden descargar todas en un ZIP.
+- **Agentes de IA (MCP)** — cada usuario puede conectar Claude, ChatGPT u otro asistente compatible con MCP a su libreta y consultarla o apuntar trabajos, ventas y gastos hablando (versión con servidor; ver `INSTALACION.md`).
 - **Idiomas** — español, catalán, inglés, alemán, italiano y francés. La primera vez se usa el idioma del dispositivo; se cambia en *Ajustes → Idioma y apariencia* o en la pantalla de acceso. Números, fechas y moneda siguen el formato de cada idioma. Las páginas de privacidad y condiciones están solo en español.
 
 ## Cómo usarla
@@ -75,7 +76,8 @@ js/app.js       vistas y formularios (textos en español dentro de t())
 js/i18n.js      idioma de la interfaz: t(), idioma elegido y formato local
 js/i18n/*.js    traducciones (ca, en, de, it, fr), con el texto en español como clave
 api/            API en PHP + MySQL (api.php, setup.php, config.example.php)
-tests/          tests de los cálculos, la combinación de cambios, las traducciones y las fotos
+api/mcp.php     servidor MCP para agentes de IA (herramientas en mcp_tools.php, costes en calc.php)
+tests/          tests de los cálculos, la combinación de cambios, las traducciones, las fotos y el servidor MCP (necesita php)
 ```
 
 ```bash
