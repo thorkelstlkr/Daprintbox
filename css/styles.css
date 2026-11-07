@@ -353,3 +353,36 @@ textarea { resize: vertical; }
 .copy-row { display: flex; gap: 8px; margin: 6px 0 10px; }
 .copy-row input { flex: 1; min-width: 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .8rem; }
 #modal-body ol li { margin: 3px 0; }
+
+/* ---------- Escandallos ---------- */
+.part-row { display: grid; gap: 6px; align-items: center; margin-bottom: 6px; }
+.parts[data-kind="3d"] .part-row { grid-template-columns: minmax(90px, 1.2fr) 56px minmax(120px, 1.6fr) 76px 66px 32px; }
+.parts:not([data-kind="3d"]) .part-row { grid-template-columns: minmax(90px, 1.2fr) 56px minmax(120px, 1.6fr) 70px 70px 66px 32px; }
+.parts[data-kind="3d"] .only-sheet, .parts:not([data-kind="3d"]) .only-3d { display: none; }
+.part-head { margin-bottom: 2px; font-size: .75rem; }
+@media (max-width: 640px) {
+  .part-head { display: none; }
+  .parts[data-kind="3d"] .part-row { grid-template-columns: 1fr 56px 32px; }
+  .parts:not([data-kind="3d"]) .part-row { grid-template-columns: 1fr 1fr 1fr 32px; }
+  .part-row { padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+  .part-row [name="pt-fil"], .part-row [name="pt-mat"] { grid-column: 1 / -1; }
+}
+
+/* ---------- Ayuda ---------- */
+.help-link {
+  display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; margin-left: 8px; vertical-align: 3px;
+  border-radius: 50%; border: 1px solid var(--border); color: var(--ink-2); font-size: .8rem; font-weight: 700; text-decoration: none;
+}
+.help-link:hover { background: var(--surface-2); color: var(--ink); }
+.help-index { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 16px; }
+.help-index a { padding: 4px 10px; border-radius: 999px; background: var(--surface-2); color: var(--ink); font-size: .85rem; text-decoration: none; }
+.help-index a:hover { text-decoration: underline; }
+.help-section { padding: 0; scroll-margin-top: 72px; }
+.help-section summary { cursor: pointer; padding: 14px 18px; list-style: none; display: flex; align-items: center; gap: 8px; }
+.help-section summary::-webkit-details-marker { display: none; }
+.help-section summary::before { content: "▸"; color: var(--ink-2); transition: transform .15s; }
+.help-section[open] summary::before { transform: rotate(90deg); }
+.help-section summary h2 { margin: 0; font-size: 1.05rem; }
+.help-section ul { margin: 0; padding: 0 18px 4px 40px; }
+.help-section li { margin: 6px 0; line-height: 1.5; max-width: 75ch; }
+.help-section p { margin: 8px 18px 14px 40px; }

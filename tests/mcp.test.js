@@ -144,3 +144,39 @@ test('herramientas: consultas, fichas y errores claros', { skip: !php && 'sin ph
   // las herramientas declaran si escriben y los esquemas son objetos JSON
   assert.ok(tools.every((t) => t.inputSchema.type === 'object' && typeof t.write === 'boolean' && t.annotations.readOnlyHint === !t.write));
 });
+
+test('herramientas: un encargo de escandallo cuesta lo mismo que en la app y registra trabajo y venta', { skip: !php && 'sin php' }, () => {
+  const st = fixture();
+  st.products = [{ id: 'k1', name: 'Clicker', kind: '3d', printerId: '', laborMinutes: 3, extras: 0.05, margin: '',
+    parts: [{ name: 'Carcasa', qty: 1, filamentId: 'f1', grams: 4.5, minutes: 16 }, { name: 'Tecla', qty: 2, filamentId: 'f1', grams: 1.2, minutes: 5 }],
+    components: [{ componentId: 'c1', qty: 1 }] },
+  { id: 'k2', name: 'Posavasos ×4', kind: 'laser', parts: [{ name: 'Posavasos', qty: 4, materialId: 'm1', width: 100, height: 100, minutes: 6 }], components: [] }];
+  const { results, state } = run({ mode: 'tools', state: st, today: '2026-11-07', calls: [
+    { name: 'ver_escandallos', args: {} },
+    { name: 'presupuestar_encargo', args: { escandallo_id: 'k1', conjuntos: 25, precio_por_conjunto: 3 } },
+    { name: 'registrar_encargo', args: { escandallo_id: 'k1', conjuntos: 25, venta: { precio_por_conjunto: 3, cliente: 'Instituto' } } },
+    { name: 'registrar_encargo', args: { escandallo_id: 'k2', conjuntos: 3 } },
+    { name: 'guardar_ficha', args: { seccion: 'escandallos', id: 'k1', datos: { nombre: 'x' } } },
+  ] });
+  const [list, quote, order, laser, edit] = results;
+  assert.ok([list, quote, order, laser].every((r) => r.ok), JSON.stringify(results));
+  const by = (arr) => Object.fromEntries(arr.map((x) => [x.id, x]));
+  for (const [id, n] of [['k1', 25], ['k2', 3]]) {
+    const pd = st.products.find((x) => x.id === id);
+    const job = Calc.productJob(pd, n, by(st.filaments), by(st.materials));
+    const pr = id === 'k1' ? st.printers[0] : st.printers[1];        // la predeterminada (3D) y la primera láser
+    const js = Calc.printCost(job, by(st.filaments), st.settings, pr, by(st.components), by(st.materials));
+    const rec = state.prints.find((p) => p.productId === id);
+    assert.strictEqual(rec.printerId, pr.id);
+    close(rec.cost.total, js.total, `${id} total`);
+    close(rec.hours, job.hours, `${id} horas`);
+  }
+  assert.strictEqual(list.data.escandallos[0].coste_por_conjunto, quote.data.coste_por_conjunto);
+  assert.strictEqual(quote.data.total_del_encargo, 75);
+  assert.strictEqual(state.filaments[0].remaining, 800 - 25 * (4.5 + 2.4));
+  assert.strictEqual(state.components[0].stock, 5);
+  const sale = state.sales[state.sales.length - 1];
+  assert.deepStrictEqual([sale.quantity, sale.unitPrice, sale.customer, sale.costFromPrint, sale.printId === state.prints[1].id], [25, 3, 'Instituto', true, true]);
+  assert.strictEqual(state.prints[2].sheets[0].count, 4);
+  assert.ok(!edit.ok && /se crean y se editan en la app/.test(edit.error));
+});

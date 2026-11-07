@@ -13,7 +13,7 @@
 (function (root) {
   'use strict';
 
-  const COLLECTIONS = ['printers', 'filaments', 'components', 'materials', 'prints', 'sales', 'expenses'];
+  const COLLECTIONS = ['printers', 'filaments', 'components', 'materials', 'products', 'prints', 'sales', 'expenses'];
   const DELTA_FIELDS = { filaments: ['remaining'], components: ['stock'], materials: ['stock'] };
 
   const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);

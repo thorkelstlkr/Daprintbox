@@ -10,10 +10,10 @@
 (function (root) {
   'use strict';
 
-  /** Ids de las fotos que usa una libreta: varias por trabajo y una por filamento, material o componente. */
+  /** Ids de las fotos que usa una libreta: varias por trabajo y una por filamento, material, componente o escandallo. */
   function refsOf(state) {
     const refs = new Set();
-    ['prints', 'filaments', 'materials', 'components'].forEach((c) => ((state && state[c]) || []).forEach((it) => {
+    ['prints', 'filaments', 'materials', 'components', 'products'].forEach((c) => ((state && state[c]) || []).forEach((it) => {
       if (!it) return;
       (Array.isArray(it.photos) ? it.photos : []).forEach((id) => { if (typeof id === 'string' && id) refs.add(id); });
       if (typeof it.photo === 'string' && it.photo) refs.add(it.photo);

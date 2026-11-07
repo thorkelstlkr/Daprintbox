@@ -29,6 +29,7 @@
     filaments: [],
     components: [],
     materials: [],
+    products: [],
     prints: [],
     sales: [],
     expenses: [],
@@ -70,6 +71,7 @@
       filaments: Array.isArray(data.filaments) ? data.filaments : [],
       components: Array.isArray(data.components) ? data.components : [],
       materials: Array.isArray(data.materials) ? data.materials : [],
+      products: Array.isArray(data.products) ? data.products : [], // escandallos
       prints,
       sales: Array.isArray(data.sales) ? data.sales : [],
       expenses: Array.isArray(data.expenses) ? data.expenses : [],

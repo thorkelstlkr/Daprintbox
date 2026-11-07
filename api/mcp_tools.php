@@ -22,7 +22,7 @@ function lm_default_settings()
 
 function lm_collections()
 {
-    return array('printers', 'filaments', 'components', 'materials', 'prints', 'sales', 'expenses');
+    return array('printers', 'filaments', 'components', 'materials', 'products', 'prints', 'sales', 'expenses');
 }
 
 /** Libreta con todas sus listas (igual que Store.normalize de la app). */
@@ -47,7 +47,7 @@ function lm_normalize($data)
 function lm_col_names()
 {
     return array('filamentos' => 'filaments', 'materiales' => 'materials', 'componentes' => 'components', 'maquinas' => 'printers',
-        'trabajos' => 'prints', 'ventas' => 'sales', 'gastos' => 'expenses');
+        'escandallos' => 'products', 'trabajos' => 'prints', 'ventas' => 'sales', 'gastos' => 'expenses');
 }
 
 function lm_col($name)
@@ -308,7 +308,9 @@ function lm_out_print($p, $sold)
         $mat[] = lm_get($it, 'filamentName', '') . ': ' . lm_fmt_amount(lm_get($it, 'grams'), lm_get($it, 'unit', 'g'));
     }
     foreach ((array) lm_get($p, 'sheets', array()) as $it) {
-        $mat[] = lm_get($it, 'materialName', '') . ': ' . lm_fmt(lm_get($it, 'width')) . ' × ' . lm_fmt(lm_get($it, 'height')) . ' mm por pieza';
+        $cnt = lm_get($it, 'count');
+        $mat[] = lm_get($it, 'materialName', '') . ': ' . ($cnt !== null && lm_num($cnt) != 1 ? lm_fmt($cnt, 2) . ' × ' : '')
+            . lm_fmt(lm_get($it, 'width')) . ' × ' . lm_fmt(lm_get($it, 'height')) . ' mm por pieza';
     }
     $comps = array();
     foreach ((array) lm_get($p, 'components', array()) as $it) {
@@ -347,6 +349,87 @@ function lm_out_expense($e)
     $k = lm_get($e, 'category', 'otros');
     return array('id' => lm_get($e, 'id'), 'fecha' => lm_get($e, 'date', ''), 'categoria' => $k, 'categoria_nombre' => lm_get($cats, $k, $k),
         'descripcion' => lm_get($e, 'description', ''), 'importe' => lm_r2(lm_get($e, 'amount')));
+}
+
+/** Máquina de un escandallo: la suya, o la predeterminada o la primera adecuada al tipo (como la app). */
+function lm_product_printer($pd, $state)
+{
+    $printers = lm_by_id($state['printers']);
+    $kind = lm_get($pd, 'kind') ? $pd['kind'] : '3d';
+    $own = lm_get($printers, lm_get($pd, 'printerId'));
+    if ($own) {
+        return $own;
+    }
+    $default = lm_get($printers, lm_get($state['settings'], 'defaultPrinterId'));
+    if (lm_machine_fits($default, $kind)) {
+        return $default;
+    }
+    foreach ($state['printers'] as $p) {
+        if (lm_machine_fits($p, $kind)) {
+            return $p;
+        }
+    }
+    return $default;
+}
+
+/** Trabajo de N conjuntos de un escandallo, con nombres y coste, igual que en la app. */
+function lm_product_cost($pd, $sets, $state)
+{
+    $fils = lm_by_id($state['filaments']);
+    $mats = lm_by_id($state['materials']);
+    $comps = lm_by_id($state['components']);
+    $job = lm_product_job($pd, $sets, $fils, $mats);
+    foreach ($job['sheets'] as $k => $it) {
+        if (isset($mats[$it['materialId']])) {
+            $job['sheets'][$k]['materialName'] = lm_material_label($mats[$it['materialId']]);
+        }
+    }
+    foreach ($job['components'] as $k => $c) {
+        $x = lm_get($comps, $c['componentId']);
+        $job['components'][$k]['componentName'] = $x ? $x['name'] : '';
+        $job['components'][$k]['unitCost'] = $x ? lm_component_unit_cost($x) : 0;
+    }
+    $pr = lm_product_printer($pd, $state);
+    $job['printerId'] = $pr ? $pr['id'] : '';
+    $job['printerName'] = $pr ? $pr['name'] : '';
+    $job['cost'] = lm_print_cost($job, $fils, $state['settings'], $pr, $comps, $mats);
+    return $job;
+}
+
+function lm_out_product($pd, $state)
+{
+    $j = lm_product_cost($pd, 1, $state);
+    $parts = array();
+    $fils = lm_by_id($state['filaments']);
+    $mats = lm_by_id($state['materials']);
+    foreach ((array) lm_get($pd, 'parts', array()) as $pt) {
+        $o = array('pieza' => lm_get($pt, 'name', ''), 'unidades_por_conjunto' => lm_num(lm_get($pt, 'qty')), 'minutos_por_pieza' => lm_num(lm_get($pt, 'minutes')));
+        if (lm_get($pt, 'filamentId')) {
+            $f = lm_get($fils, $pt['filamentId']);
+            $o['filamento'] = $f ? lm_filament_label($f) : '(ya no existe)';
+            $o['cantidad_por_pieza'] = lm_fmt_amount(lm_get($pt, 'grams'), $f ? lm_unit_of($f) : 'g');
+        }
+        if (lm_get($pt, 'materialId')) {
+            $m = lm_get($mats, $pt['materialId']);
+            $o['material'] = $m ? lm_material_label($m) : '(ya no existe)';
+            $o['medidas_mm'] = lm_fmt(lm_get($pt, 'width')) . ' × ' . lm_fmt(lm_get($pt, 'height'));
+        }
+        $parts[] = $o;
+    }
+    $comps = array();
+    foreach ($j['components'] as $c) {
+        $comps[] = lm_fmt($c['qty'], 2) . ' × ' . $c['componentName'];
+    }
+    $kinds = lm_kinds();
+    $k = lm_get($pd, 'kind') ? $pd['kind'] : '3d';
+    return array(
+        'id' => lm_get($pd, 'id'), 'nombre' => lm_get($pd, 'name', ''), 'tipo' => $k, 'tipo_nombre' => lm_get($kinds, $k, $k),
+        'maquina' => $j['printerName'], 'piezas' => $parts, 'componentes_por_conjunto' => $comps,
+        'montaje_minutos_por_conjunto' => lm_num(lm_get($pd, 'laborMinutes')), 'extras_por_conjunto' => lm_r2(lm_get($pd, 'extras')),
+        'minutos_de_maquina_por_conjunto' => round($j['hours'] * 60, 1), 'coste_por_conjunto' => lm_r2($j['cost']['unit']),
+        'margen_pct' => $j['cost']['margin'], 'precio_sugerido_por_conjunto' => lm_r2($j['cost']['suggestedUnitPrice']),
+        'notas' => lm_get($pd, 'notes', ''), 'tiene_foto' => (bool) lm_get($pd, 'photo'),
+    );
 }
 
 function lm_out_settings($st)
@@ -681,11 +764,31 @@ function lm_tools()
             'inputSchema' => array('type' => 'object', 'properties' => array(
                 'seccion' => array('type' => 'string', 'enum' => $cols), 'id' => array('type' => 'string')), 'required' => array('seccion', 'id'))),
         array('name' => 'ver_fotos', 'title' => 'Ver fotos', 'write' => false, 'annotations' => $ro,
-            'description' => 'Muestra las fotos de un trabajo (varias), filamento, material o componente (una).',
+            'description' => 'Muestra las fotos de un trabajo (varias), filamento, material, componente o escandallo (una).',
             'inputSchema' => array('type' => 'object', 'properties' => array(
-                'seccion' => array('type' => 'string', 'enum' => array('trabajos', 'filamentos', 'materiales', 'componentes')),
+                'seccion' => array('type' => 'string', 'enum' => array('trabajos', 'filamentos', 'materiales', 'componentes', 'escandallos')),
                 'id' => array('type' => 'string'),
                 'tamano' => array('type' => 'string', 'enum' => array('grande', 'miniatura'), 'description' => 'Por defecto grande.')), 'required' => array('seccion', 'id'))),
+        array('name' => 'ver_escandallos', 'title' => 'Escandallos', 'write' => false, 'annotations' => $ro,
+            'description' => 'Escandallos: productos que se venden como un conjunto de piezas (p. ej. un clicker: carcasa y tecla impresas + interruptor + anilla de llavero), con sus piezas, componentes, coste y precio sugerido por conjunto a los precios actuales. Para un encargo de un escandallo usa presupuestar_encargo y registrar_encargo, no calcular_coste.',
+            'inputSchema' => array('type' => 'object', 'properties' => array('buscar' => array('type' => 'string', 'description' => 'Texto en el nombre.')))),
+        array('name' => 'presupuestar_encargo', 'title' => 'Presupuestar encargo', 'write' => false, 'annotations' => $ro,
+            'description' => 'Coste, precio sugerido y total de un encargo de N conjuntos de un escandallo, sin guardar nada, con avisos si falta stock. Con precio_por_conjunto calcula el total y el beneficio a ese precio.',
+            'inputSchema' => array('type' => 'object', 'properties' => array(
+                'escandallo_id' => array('type' => 'string', 'description' => 'Id del escandallo (ver_escandallos).'),
+                'conjuntos' => array('type' => 'integer', 'minimum' => 1),
+                'precio_por_conjunto' => array('type' => 'number', 'minimum' => 0, 'description' => 'Opcional. Por defecto, el sugerido.')),
+                'required' => array('escandallo_id', 'conjuntos'))),
+        array('name' => 'registrar_encargo', 'title' => 'Registrar encargo', 'write' => true, 'annotations' => $rw,
+            'description' => 'Registra el trabajo de N conjuntos de un escandallo (descuenta piezas impresas, planchas y componentes del stock) y, si se indica venta, también la venta ligada a ese trabajo.',
+            'inputSchema' => array('type' => 'object', 'properties' => array(
+                'escandallo_id' => array('type' => 'string'), 'conjuntos' => array('type' => 'integer', 'minimum' => 1),
+                'fecha' => $dateToday, 'nombre' => array('type' => 'string', 'description' => 'Nombre del trabajo. Por defecto «escandallo ×N».'),
+                'descontar_stock' => array('type' => 'boolean', 'description' => 'Por defecto sí.'),
+                'venta' => array('type' => 'object', 'description' => 'Solo si el encargo ya está vendido.', 'properties' => array(
+                    'precio_por_conjunto' => array('type' => 'number', 'minimum' => 0, 'description' => 'Por defecto, el sugerido.'),
+                    'comisiones' => array('type' => 'number', 'minimum' => 0), 'cliente' => array('type' => 'string'), 'canal' => array('type' => 'string')))),
+                'required' => array('escandallo_id', 'conjuntos'))),
         array('name' => 'calcular_coste', 'title' => 'Calcular coste', 'write' => false, 'annotations' => $ro,
             'description' => 'Calcula el coste y el precio sugerido de un trabajo sin guardarlo (para presupuestos), con avisos si falta stock. Mismo cálculo que la app.',
             'inputSchema' => lm_job_schema(false)),
@@ -989,6 +1092,9 @@ function lm_tool_ver_ficha($args, &$state, $today)
         case 'expenses':
             $o = lm_out_expense($x);
             break;
+        case 'products':
+            $o = lm_out_product($x, $state);
+            break;
         default:
             $o = lm_out_print($x, lm_sold_by_print($state['sales']));
             $c = (array) lm_get($x, 'cost', array());
@@ -1232,6 +1338,9 @@ function lm_tool_guardar_ficha($args, &$state, $today)
 {
     $sec = lm_get($args, 'seccion');
     $col = lm_col($sec);
+    if ($col === 'products') {
+        throw new LmToolError('Los escandallos se crean y se editan en la app (pestaña Escandallos). Desde aquí se pueden consultar, presupuestar y registrar encargos.');
+    }
     $datos = lm_get($args, 'datos');
     if (!is_array($datos) || !$datos) {
         throw new LmToolError('Faltan los campos a guardar en «datos».');
@@ -1375,4 +1484,70 @@ function lm_tool_eliminar($args, &$state, $today)
     }
     return lm_ok(array('mensaje' => 'Eliminado: ' . lm_get($x, 'name', lm_get($x, 'description', $id)) . '.', 'notas' => $notes,
         'deshacer' => 'Se puede recuperar restaurando la versión anterior en la app (Ajustes → Historial de versiones).'), true);
+}
+
+function lm_tool_ver_escandallos($args, &$state, $today)
+{
+    $out = array();
+    foreach ($state['products'] as $pd) {
+        if (lm_matches(lm_get($args, 'buscar'), array(lm_get($pd, 'name', '')))) {
+            $out[] = lm_out_product($pd, $state);
+        }
+    }
+    return lm_ok(array('moneda' => $state['settings']['currency'], 'escandallos' => $out));
+}
+
+function lm_order($args, $state)
+{
+    $pd = $state['products'][lm_require_index($state, 'products', lm_get($args, 'escandallo_id'), 'escandallo')];
+    $n = (int) lm_number(lm_get($args, 'conjuntos'), 'conjuntos', 1);
+    return array($pd, $n, lm_product_cost($pd, $n, $state));
+}
+
+function lm_tool_presupuestar_encargo($args, &$state, $today)
+{
+    list($pd, $n, $j) = lm_order($args, $state);
+    $c = $j['cost'];
+    $price = lm_get($args, 'precio_por_conjunto') !== null ? lm_number($args['precio_por_conjunto'], 'precio_por_conjunto', 0) : round($c['suggestedUnitPrice'], 2);
+    return lm_ok(array(
+        'moneda' => $state['settings']['currency'], 'escandallo' => $pd['name'], 'conjuntos' => $n, 'maquina' => $j['printerName'],
+        'tiempo_de_maquina_horas' => round($j['hours'], 2), 'coste_por_conjunto' => lm_r2($c['unit']), 'coste_total' => lm_r2($c['total']),
+        'precio_sugerido_por_conjunto' => lm_r2($c['suggestedUnitPrice']), 'precio_por_conjunto' => lm_r2($price),
+        'total_del_encargo' => lm_r2($price * $n), 'beneficio' => lm_r2($price * $n - $c['total']),
+        'margen_sobre_precio_pct' => $price > 0 ? round(($price - $c['unit']) / $price * 100, 1) : null,
+        'desglose' => lm_out_cost($c, $state['settings']), 'avisos' => lm_stock_warnings($j, $state),
+    ));
+}
+
+function lm_tool_registrar_encargo($args, &$state, $today)
+{
+    if (!$state['printers']) {
+        throw new LmToolError('Primero añade una máquina (guardar_ficha con seccion maquinas).');
+    }
+    list($pd, $n, $j) = lm_order($args, $state);
+    $deduct = lm_get($args, 'descontar_stock', true) !== false;
+    $warnings = $deduct ? lm_stock_warnings($j, $state) : array();
+    $date = lm_date(lm_get($args, 'fecha'), $today);
+    $name = lm_text(lm_get($args, 'nombre', ''));
+    $rec = array('id' => lm_uid()) + $j + array('name' => $name !== '' ? $name : ($n > 1 ? $pd['name'] . ' ×' . $n : $pd['name']), 'fileUrl' => '',
+        'photos' => lm_get($pd, 'photo') ? array($pd['photo']) : array(), 'date' => $date, 'notes' => '', 'stockDeducted' => $deduct);
+    if ($deduct) {
+        lm_apply_job_stock($state, $rec, -1);
+    }
+    $state['prints'][] = $rec;
+    $out = array('mensaje' => $deduct ? 'Encargo registrado y stock actualizado.' : 'Encargo registrado (sin descontar stock).',
+        'trabajo' => lm_out_print($rec, lm_sold_by_print($state['sales'])), 'desglose' => lm_out_cost($rec['cost'], $state['settings']));
+    $sale = lm_get($args, 'venta');
+    if (is_array($sale)) {
+        $price = lm_get($sale, 'precio_por_conjunto') !== null ? lm_number($sale['precio_por_conjunto'], 'precio_por_conjunto', 0) : round($rec['cost']['suggestedUnitPrice'], 2);
+        $s = array('id' => lm_uid(), 'date' => $date, 'printId' => $rec['id'], 'description' => $pd['name'], 'quantity' => $n, 'unitPrice' => $price,
+            'fees' => lm_number(lm_get($sale, 'comisiones', 0), 'comisiones', 0), 'unitCost' => $rec['cost']['unit'],
+            'customer' => lm_text(lm_get($sale, 'cliente', '')), 'channel' => lm_text(lm_get($sale, 'canal', '')), 'costFromPrint' => true);
+        $state['sales'][] = $s;
+        $out['mensaje'] .= ' Venta registrada.';
+        $out['venta'] = lm_out_sale($s);
+    }
+    $out['avisos'] = $warnings;
+    $out['moneda'] = $state['settings']['currency'];
+    return lm_ok($out, true);
 }

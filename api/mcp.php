@@ -138,7 +138,7 @@ if (!is_array($msg)) {
 function mcp_instructions($person, $today, $canWrite, $currency)
 {
     return "Libreta Maker es la libreta de un taller maker de {$person}: controla el stock de filamento y resina para impresión 3D, "
-        . 'los materiales en plancha (láser y sellos), los componentes, las máquinas, los trabajos (con su coste calculado), las ventas y los gastos. '
+        . 'los materiales en plancha (láser y sellos), los componentes, las máquinas, los escandallos de productos, los trabajos (con su coste calculado), las ventas y los gastos. '
         . "Hoy es {$today}. La moneda de la libreta es {$currency}.\n"
         . "- Unidades: el filamento va en gramos y la resina en ml (o g); los materiales en planchas, y las medidas de cada pieza en mm; el tiempo de máquina en horas (2.5 = 2 h 30 min).\n"
         . "- Antes de registrar, editar o borrar, usa las herramientas de consulta para conocer los ids: nunca te los inventes. Si un nombre coincide con varias fichas, pregunta cuál.\n"
@@ -147,6 +147,7 @@ function mcp_instructions($person, $today, $canWrite, $currency)
             . "- Al registrar un trabajo, el coste se calcula como en la app y el material se descuenta del stock. Si el usuario solo quiere un presupuesto, usa calcular_coste, que no guarda nada.\n"
             . "- Las compras de filamento, planchas o componentes se apuntan con reponer_stock (suma al stock y crea el gasto), no con registrar_gasto.\n"
             : "- Este acceso es de solo lectura: puedes consultar y calcular costes, pero no guardar cambios. Si el usuario quiere apuntar algo, dile que lo haga en la app o que cree un acceso con permiso para cambios.\n")
+        . "- Los productos que se venden como conjunto de piezas (clickers, sets…) tienen un escandallo: para presupuestarlos o registrarlos usa ver_escandallos, presupuestar_encargo y registrar_encargo indicando el número de conjuntos.\n"
         . "- Convierte las fechas relativas («ayer», «el lunes») a AAAA-MM-DD a partir de hoy.\n"
         . "- Las fotos solo se pueden añadir desde la app; aquí se pueden ver con ver_fotos.\n"
         . '- Responde en el idioma del usuario, aunque los datos y las herramientas estén en español.';

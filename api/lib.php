@@ -215,11 +215,11 @@ function dpb_valid_photo_id($id)
     return is_string($id) && preg_match('/^[a-f0-9]{32}$/', $id) === 1;
 }
 
-/** Ids de las fotos que usa una libreta: varias por trabajo y una por filamento, material o componente. */
+/** Ids de las fotos que usa una libreta: varias por trabajo y una por filamento, material, componente o escandallo. */
 function dpb_photo_refs($data)
 {
     $refs = array();
-    foreach (array('prints', 'filaments', 'materials', 'components') as $col) {
+    foreach (array('prints', 'filaments', 'materials', 'components', 'products') as $col) {
         if (!is_array($data) || !isset($data[$col]) || !is_array($data[$col])) {
             continue;
         }

@@ -146,3 +146,33 @@ test('resina medida en ml: coste por ml del envase', () => {
   const c = Calc.printCost({ items: [{ filamentId: 'r', grams: 85 }], hours: 0, quantity: 12 }, resina, settings);
   close(c.material, 85 * 0.03); // 85 ml × 0,03 €/ml
 });
+
+test('escandallo: N conjuntos de un clicker suman piezas, tiempo, componentes y montaje', () => {
+  const fil = { f1: { id: 'f1', name: 'PLA', material: 'PLA', spoolWeight: 1000, price: 20 }, f2: { id: 'f2', name: 'Silk', spoolWeight: 1000, price: 25 } };
+  const product = { id: 'k', name: 'Clicker', kind: '3d', printerId: 'pr1', laborMinutes: 3, extras: 0.05, margin: '',
+    parts: [{ name: 'Carcasa', qty: 1, filamentId: 'f1', grams: 4.5, minutes: 16 }, { name: 'Botón', qty: 2, filamentId: 'f2', grams: 1, minutes: 5 },
+      { name: 'vacía', qty: 0, filamentId: 'f1', grams: 50, minutes: 50 }],
+    components: [{ componentId: 'sw', qty: 1 }, { componentId: 'ring', qty: 1 }, { componentId: '', qty: 3 }] };
+  const job = Calc.productJob(product, 20, fil, {});
+  assert.deepStrictEqual(job.items.map((it) => [it.filamentId, it.grams]), [['f1', 90], ['f2', 40]]);
+  assert.strictEqual(job.hours, (26 * 20) / 60);
+  assert.strictEqual(job.quantity, 20);
+  assert.strictEqual(job.laborHours, 1);
+  assert.ok(Math.abs(job.extras - 1) < 1e-12);
+  assert.deepStrictEqual(job.components, [{ componentId: 'sw', qty: 1 }, { componentId: 'ring', qty: 1 }]);
+  assert.strictEqual(job.productId, 'k');
+  const c = Calc.printCost(job, fil, { kwhPrice: 0, failureRate: 0, laborRate: 12, defaultMargin: 50, sheetWaste: 0 }, null,
+    { sw: { price: 6.9, packUnits: 10 }, ring: { price: 4.2, packUnits: 100 } }, {});
+  const perSet = (4.5 * 0.02 + 2 * 0.025) + (0.69 + 0.042) + (3 / 60) * 12 + 0.05;
+  assert.ok(Math.abs(c.unit - perSet) < 1e-9);
+});
+
+test('escandallo de láser: varias piezas iguales por conjunto cuentan en planchas', () => {
+  const mats = { m1: { id: 'm1', name: 'Contrachapado', sheetWidth: 600, sheetHeight: 400, price: 4.8 } };
+  const job = Calc.productJob({ kind: 'laser', parts: [{ name: 'Posavasos', qty: 4, materialId: 'm1', width: 100, height: 100, minutes: 6 }] }, 3, {}, mats);
+  assert.deepStrictEqual(job.items, []);
+  assert.strictEqual(job.sheets[0].count, 4);
+  assert.strictEqual(job.hours, (24 * 3) / 60);
+  const used = Calc.sheetsUsed(job.sheets, job.quantity, 0, mats).m1;
+  assert.ok(Math.abs(used - (4 * 100 * 3) / 2400) < 1e-12);   // 12 posavasos de 10×10 en planchas de 60×40
+});

@@ -386,7 +386,7 @@
       const ids = printPhotos(p);
       ids.forEach((id, i) => entries.push({ id, name: `${t('Trabajos')}/${p.date ? p.date + ' ' : ''}${clean(p.name)}${ids.length > 1 ? ` (${i + 1})` : ''}` }));
     });
-    [[S.filaments, t('Filamento y resina'), (f) => f.name], [S.materials, t('Materiales'), materialLabel], [S.components, t('Componentes'), (c) => c.name]]
+    [[S.filaments, t('Filamento y resina'), (f) => f.name], [S.materials, t('Materiales'), materialLabel], [S.components, t('Componentes'), (c) => c.name], [S.products, t('Escandallos'), (x) => x.name]]
       .forEach(([list, folder, name]) => list.forEach((x) => { if (x.photo) entries.push({ id: x.photo, name: `${folder}/${clean(name(x))}` }); }));
     if (!entries.length) { toast(t('Todavía no hay fotos.')); return; }
     const used = new Set(), files = [];
@@ -447,7 +447,7 @@
 
     return `
       <div class="page-head">
-        <h1>${t('Resumen')}</h1>
+        <h1>${t('Resumen')}${helpLink('dashboard')}</h1>
         <div class="filters">${periodSelect('period', ui.period)}</div>
       </div>
       ${empty ? `<div class="card"><h2>${t('Bienvenido 👋')}</h2>
@@ -617,7 +617,7 @@
 
     return `
       <div class="page-head">
-        <h1>${t('Filamento y resina')}</h1>
+        <h1>${t('Filamento y resina')}${helpLink('filaments')}</h1>
         <div class="actions">
           <input type="search" placeholder="${t('Buscar…')}" data-filter="filamentQuery" value="${esc(ui.filamentQuery)}" aria-label="${t('Buscar filamento o resina')}">
           <button class="btn primary" data-action="new-filament">${t('+ Nuevo filamento o resina')}</button>
@@ -773,7 +773,7 @@
     const total = list.reduce((s, m) => s + Math.max(0, num(m.stock)) * num(m.price), 0);
     return `
       <div class="page-head">
-        <h1>${t('Materiales en plancha')}</h1>
+        <h1>${t('Materiales en plancha')}${helpLink('materials')}</h1>
         <div class="actions"><button class="btn primary" data-action="new-material">${t('+ Nuevo material')}</button></div>
       </div>
       <p class="small muted" style="margin-top:-8px">${t('Para corte y grabado láser (madera, MDF, metacrilato, cuero…) y sellos de insoladora (plancha de fotopolímero y fotolito/negativo). El coste se calcula por cm² según las medidas de cada pieza, más un {pct} % de desperdicio (cámbialo en Ajustes).', { pct: fmtNum(S.settings.sheetWaste) })}</p>
@@ -891,7 +891,7 @@
     const total = list.reduce((s, c) => s + Math.max(0, num(c.stock)) * componentUnitCost(c), 0);
     return `
       <div class="page-head">
-        <h1>${t('Componentes')}</h1>
+        <h1>${t('Componentes')}${helpLink('components')}</h1>
         <div class="actions"><button class="btn primary" data-action="new-component">${t('+ Nuevo componente')}</button></div>
       </div>
       <p class="small muted" style="margin-top:-8px">${t('Piezas externas que montas en tus impresiones: portalámparas, tiras LED, imanes, tornillos… Al registrar una impresión indica cuántas lleva cada pieza y se sumarán al coste y se descontarán del stock.')}</p>
@@ -1008,7 +1008,7 @@
     const dp = defaultPrinter();
     return `
       <div class="page-head">
-        <h1>${t('Máquinas')}</h1>
+        <h1>${t('Máquinas')}${helpLink('printers')}</h1>
         <div class="actions"><button class="btn primary" data-action="new-printer">${t('+ Nueva máquina')}</button></div>
       </div>
       <div class="card">
@@ -1106,7 +1106,7 @@
       .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
     return `
       <div class="page-head">
-        <h1>${t('Trabajos')}</h1>
+        <h1>${t('Trabajos')}${helpLink('prints')}</h1>
         <div class="actions">
           <select data-period="kind" aria-label="${t('Tipo de trabajo')}"><option value="all">${t('Todos los tipos')}</option>${Object.entries(KINDS).map(([k, v]) => `<option value="${k}"${ui.kind === k ? ' selected' : ''}>${t(v)}</option>`).join('')}</select>
           <button class="btn" data-action="quote">${t('Calculadora de coste')}</button>
@@ -1206,7 +1206,7 @@
     };
     const materialOptions = (selected) => `<option value="">${t('— Elige material —')}</option>` + S.materials
       .map((m) => `<option value="${m.id}"${m.id === selected ? ' selected' : ''}>${esc(materialLabel(m))} · ${money(sheetCostPerCm2(m) * 100)}/100 cm² (${t('{n} pl.', { n: fmtNum(m.stock, 2) })})</option>`).join('');
-    const sheetRow = (it) => `<div class="sheet-row">
+    const sheetRow = (it) => `<div class="sheet-row"${it.count != null && num(it.count) !== 1 ? ` data-count="${esc(it.count)}" title="${esc(t('{n} piezas iguales por unidad', { n: fmtNum(it.count, 2) }))}"` : ''}>
         <select name="sheet-id" aria-label="${t('Material')}">${materialOptions(it.materialId)}</select>
         <input name="sheet-w" type="number" step="any" min="0" value="${esc(it.width)}" aria-label="${t('Ancho por pieza (mm)')}" placeholder="${t('ancho mm')}">
         <input name="sheet-h" type="number" step="any" min="0" value="${esc(it.height)}" aria-label="${t('Alto por pieza (mm)')}" placeholder="${t('alto mm')}">
@@ -1292,7 +1292,8 @@
         const readSheets = () => (kindSel.value === '3d' ? [] : $$('.sheet-row', b).map((row) => {
           const id = $('[name="sheet-id"]', row).value;
           const mt = S.materials.find((x) => x.id === id);
-          return { materialId: id, materialName: mt ? materialLabel(mt) : '', width: num($('[name="sheet-w"]', row).value), height: num($('[name="sheet-h"]', row).value), costPerCm2: mt ? sheetCostPerCm2(mt) : 0 };
+          return { materialId: id, materialName: mt ? materialLabel(mt) : '', width: num($('[name="sheet-w"]', row).value), height: num($('[name="sheet-h"]', row).value), costPerCm2: mt ? sheetCostPerCm2(mt) : 0,
+            ...(row.dataset.count ? { count: num(row.dataset.count) } : {}) };
         }).filter((it) => it.materialId && it.width > 0 && it.height > 0));
         const readItems = () => (kindSel.value !== '3d' ? [] : $$('.item-row', b).map((row) => {
           const id = $('[name="item-filament"]', row).value;
@@ -1413,6 +1414,431 @@
     });
   }
 
+  // ================================================================ ESCANDALLOS (productos que se venden como conjunto de piezas)
+
+  const { productJob } = window.Calc;
+
+  /** Máquina para un escandallo: la suya o, si ya no existe, la predeterminada o la primera adecuada al tipo. */
+  const productPrinter = (pd) => findPrinter(pd.printerId)
+    || (machineFits(defaultPrinter(), pd.kind || '3d') ? defaultPrinter() : S.printers.find((m) => machineFits(m, pd.kind || '3d')))
+    || defaultPrinter();
+
+  /** Trabajo equivalente a N conjuntos de un escandallo, con su coste y los nombres que guarda la app. */
+  function productCost(pd, sets) {
+    const job = productJob(pd, sets, filamentsById(), materialsById());
+    job.sheets.forEach((it) => { const m = S.materials.find((x) => x.id === it.materialId); if (m) it.materialName = materialLabel(m); });
+    job.components = job.components.map((c) => {
+      const k = S.components.find((x) => x.id === c.componentId);
+      return { ...c, componentName: k ? k.name : '', unitCost: k ? componentUnitCost(k) : 0 };
+    });
+    const pr = productPrinter(pd);
+    job.printerId = pr ? pr.id : '';
+    job.printerName = pr ? pr.name : '';
+    job.cost = printCost(job, filamentsById(), S.settings, pr, componentsById(), materialsById());
+    return job;
+  }
+
+  /** Lo que falta en el stock para fabricar un trabajo. */
+  function jobShortages(job) {
+    const out = [];
+    const need = (name, a, b) => `${name} (${t('necesitas {a}, hay {b}', { a, b })})`;
+    Object.entries(gramsByFilament(job.items)).forEach(([id, g]) => {
+      const f = S.filaments.find((x) => x.id === id);
+      if (f && g > num(f.remaining)) out.push(need(f.name, fmtAmount(g, unitOf(f)), fmtStock(f)));
+    });
+    Object.entries(sheetsUsed(job.sheets, job.quantity, S.settings.sheetWaste, materialsById())).forEach(([id, n]) => {
+      const m = S.materials.find((x) => x.id === id);
+      if (m && n > num(m.stock) + 1e-9) out.push(need(materialLabel(m), fmtNum(n, 2), fmtNum(m.stock, 2)));
+    });
+    Object.entries(componentsUsed(job.components, job.quantity)).forEach(([id, q]) => {
+      const c = S.components.find((x) => x.id === id);
+      if (c && q > num(c.stock)) out.push(need(c.name, fmtQty(q, c.unit), fmtQty(c.stock, c.unit)));
+    });
+    return out;
+  }
+
+  /** Piezas y componentes de un escandallo en una línea: «1× Carcasa · 1× Tecla · 1× Anilla». */
+  function productSummary(pd) {
+    return [
+      ...(pd.parts || []).filter((x) => num(x.qty) > 0).map((x) => `${fmtNum(x.qty, 2)}× ${x.name || t('Pieza')}`),
+      ...(pd.components || []).filter((x) => num(x.qty) > 0).map((x) => {
+        const c = S.components.find((k) => k.id === x.componentId);
+        return `${fmtNum(x.qty, 2)}× ${c ? c.name : '?'}`;
+      }),
+    ].join(' · ');
+  }
+
+  function viewProducts() {
+    const list = [...S.products].sort((a, b) => String(a.name).localeCompare(String(b.name)));
+    return `
+      <div class="page-head">
+        <h1>${t('Escandallos')}${helpLink('products')}</h1>
+        <div class="actions"><button class="btn primary" data-action="new-product">${t('+ Nuevo escandallo')}</button></div>
+      </div>
+      <p class="small muted" style="margin-top:-8px">${t('Productos que se venden como un conjunto de piezas, por ejemplo un clicker: piezas impresas, un interruptor y una anilla de llavero. Defines una vez sus piezas, componentes y montaje y, para cada encargo, solo indicas cuántos conjuntos: calcula el coste y el precio, y registra el trabajo y la venta.')}</p>
+      <div class="card">
+        ${list.length ? `<div class="table-wrap"><table>
+          <thead><tr><th>${t('Escandallo')}</th><th class="num">${t('Máquina por conjunto')}</th><th class="num">${t('Coste por conjunto')}</th><th class="num">${t('Precio sugerido')}</th><th></th></tr></thead>
+          <tbody>${list.map((pd) => {
+            const j = productCost(pd, 1);
+            const k = pd.kind || '3d';
+            return `<tr>
+              <td>${withThumb(onePhoto(pd), `<span class="badge kind-${k}">${t(KIND_SHORT[k])}</span> <b>${esc(pd.name)}</b>
+                <div class="small muted">${esc(productSummary(pd))}${j.printerName ? ` · ${esc(j.printerName)}` : ''}</div>`)}</td>
+              <td class="num nowrap">${fmtHours(j.hours)}</td>
+              <td class="num"><b>${money(j.cost.unit)}</b></td>
+              <td class="num">${money(j.cost.suggestedUnitPrice)}<div class="small muted">+${fmtNum(j.cost.margin)} %</div></td>
+              <td class="actions">
+                <button class="btn small primary" data-action="order-product" data-id="${pd.id}">${t('Encargo')}</button>
+                <button class="icon-btn" data-action="edit-product" data-id="${pd.id}" aria-label="${t('Editar')}" title="${t('Editar')}">✎</button>
+                <button class="icon-btn" data-action="dup-product" data-id="${pd.id}" aria-label="${t('Duplicar')}" title="${t('Duplicar')}">⧉</button>
+                <button class="icon-btn" data-action="delete-product" data-id="${pd.id}" aria-label="${t('Eliminar')}" title="${t('Eliminar')}">🗑</button>
+              </td></tr>`;
+          }).join('')}</tbody>
+        </table></div>` : `<div class="empty">${t('Aún no tienes escandallos. Crea uno para los productos que montas con varias piezas.')}</div>`}
+      </div>
+      <p class="small muted">${t('Los costes se calculan con los precios actuales de tu stock y tus máquinas. Cambiar un escandallo no modifica los trabajos ya registrados.')}</p>`;
+  }
+
+  const materialOptionsHtml = (selected) => `<option value="">${t('— Elige material —')}</option>` + S.materials
+    .map((m) => `<option value="${m.id}"${m.id === selected ? ' selected' : ''}>${esc(materialLabel(m))} · ${money(sheetCostPerCm2(m) * 100)}/100 cm²</option>`).join('');
+  const componentOptionsHtml = (selected) => `<option value="">${t('— Elige componente —')}</option>` + S.components
+    .map((c) => `<option value="${c.id}"${c.id === selected ? ' selected' : ''}>${esc(c.name)} · ${money(componentUnitCost(c))}/${esc(unitLabel(c.unit))}</option>`).join('');
+
+  const partRow = (pt) => `<div class="part-row">
+      <input name="pt-name" value="${esc(pt.name)}" placeholder="${t('Pieza')}" aria-label="${t('Pieza')}" maxlength="80">
+      <input name="pt-qty" type="number" step="any" min="0" value="${esc(pt.qty)}" aria-label="${t('Piezas por conjunto')}" title="${t('Piezas por conjunto')}">
+      <select name="pt-fil" class="only-3d" aria-label="${t('Filamento')}">${filamentOptions(pt.filamentId)}</select>
+      <input name="pt-grams" class="only-3d" type="number" step="any" min="0" value="${esc(pt.grams)}" placeholder="g / ml" aria-label="${t('g o ml por pieza')}" title="${t('g o ml por pieza')}">
+      <select name="pt-mat" class="only-sheet" aria-label="${t('Material')}">${materialOptionsHtml(pt.materialId)}</select>
+      <input name="pt-w" class="only-sheet" type="number" step="any" min="0" value="${esc(pt.width)}" placeholder="${t('ancho mm')}" aria-label="${t('Ancho por pieza (mm)')}">
+      <input name="pt-h" class="only-sheet" type="number" step="any" min="0" value="${esc(pt.height)}" placeholder="${t('alto mm')}" aria-label="${t('Alto por pieza (mm)')}">
+      <input name="pt-min" type="number" step="any" min="0" value="${esc(pt.minutes)}" placeholder="min" aria-label="${t('Minutos de máquina por pieza')}" title="${t('Minutos de máquina por pieza')}">
+      <button type="button" class="icon-btn" data-remove-part aria-label="${t('Quitar')}">✕</button></div>`;
+  const prodCompRow = (it) => `<div class="comp-row">
+      <select name="comp-id" aria-label="${t('Componente')}">${componentOptionsHtml(it.componentId)}</select>
+      <input name="comp-qty" type="number" step="any" min="0" value="${esc(it.qty)}" aria-label="${t('Cantidad por conjunto')}" placeholder="${t('por conjunto')}">
+      <button type="button" class="icon-btn" data-remove-comp aria-label="${t('Quitar')}">✕</button></div>`;
+
+  function productForm(pd, { copy = false } = {}) {
+    const isNew = !pd || copy;
+    const firstFil = S.filaments[0] ? S.filaments[0].id : '';
+    pd = pd ? JSON.parse(JSON.stringify(pd)) : { kind: '3d', name: '', printerId: '', notes: '', laborMinutes: 2, extras: 0, margin: '', photo: '',
+      parts: [{ name: '', qty: 1, filamentId: firstFil, grams: '', minutes: '' }], components: [] };
+    if (copy) { pd.name = t('{name} (copia)', { name: pd.name }); pd.photo = ''; }
+    openModal({
+      title: copy ? t('Duplicar escandallo') : isNew ? t('Nuevo escandallo') : t('Editar escandallo'),
+      body: `<div class="form-grid">
+          ${field(t('Nombre *'), inp('name', pd.name, `required placeholder="${t('Ej. Clicker con llavero')}"`), { wide: true })}
+          ${field(t('Tipo de trabajo'), `<select name="kind">${Object.entries(KINDS).map(([k, v]) => `<option value="${k}"${k === (pd.kind || '3d') ? ' selected' : ''}>${t(v)}</option>`).join('')}</select>`)}
+          ${field(t('Máquina'), `<select name="printerId"><option value="">${t('Automática (la predeterminada)')}</option>${S.printers.map((pr) =>
+            `<option value="${pr.id}"${pr.id === pd.printerId ? ' selected' : ''}>${esc(pr.name)} · ${money(printerHourCost(pr))}/h</option>`).join('')}</select>`)}
+        </div>
+        <h3 class="section-title">${t('Piezas de cada conjunto')}</h3>
+        <div class="parts" data-kind="${esc(pd.kind || '3d')}">
+          <div class="part-row part-head small muted" aria-hidden="true"><span>${t('Pieza')}</span><span>${t('Uds.')}</span>
+            <span class="only-3d">${t('Filamento o resina')}</span><span class="only-3d">${t('g / ml por pieza')}</span>
+            <span class="only-sheet">${t('Material')}</span><span class="only-sheet">${t('ancho mm')}</span><span class="only-sheet">${t('alto mm')}</span>
+            <span>${t('min por pieza')}</span><span></span></div>
+          <div id="parts">${(pd.parts || []).map(partRow).join('')}</div>
+        </div>
+        <button type="button" class="btn small" id="add-part" style="margin-top:8px">${t('+ Añadir pieza')}</button>
+        <p class="small muted" style="margin:6px 0 0">${t('Minutos de máquina por pieza: si imprimes varias a la vez, divide el tiempo de la placa entre las piezas que caben. Las piezas iguales se apuntan una vez con las unidades por conjunto.')}</p>
+        <h3 class="section-title">${t('Componentes de cada conjunto')}</h3>
+        ${S.components.length ? `<div class="items-list" id="comps">${(pd.components || []).map(prodCompRow).join('')}</div>
+          <button type="button" class="btn small" id="add-comp" style="margin-top:8px">${t('+ Añadir componente')}</button>`
+          : `<p class="small muted">${t('¿Lleva interruptores, anillas, imanes…? Dalos de alta en <a href="#components" data-close-link>Componentes</a> para sumarlos al coste.')}</p>`}
+        <h3 class="section-title">${t('Montaje y otros costes por conjunto')}</h3>
+        <div class="form-grid">
+          ${field(t('Montaje y acabado (min)'), numInp('laborMinutes', pd.laborMinutes, 'min="0"'), { hint: t('Por conjunto, a {rate}/h.', { rate: money(S.settings.laborRate) }) })}
+          ${field(t('Extras por conjunto (€)'), numInp('extras', pd.extras, 'min="0"'), { hint: t('Bolsita, etiqueta… lo que no llevas en el stock.') })}
+          ${field(t('Margen (%)'), numInp('margin', pd.margin, `placeholder="${S.settings.defaultMargin}"`), { hint: t('Para el precio sugerido.') })}
+          ${field(t('Notas'), inp('notes', pd.notes))}
+          ${photoField(onePhoto(pd), 1)}
+        </div>
+        <div class="card" style="margin:16px 0 0" id="preview"></div>`,
+      onOpen: (b) => {
+        b._photos = wirePhotoField(b);
+        const kindSel = $('[name="kind"]', b), partsBox = $('.parts', b);
+        const read = () => ({
+          ...pd,
+          name: val(b, 'name'), kind: kindSel.value, printerId: val(b, 'printerId'), notes: val(b, 'notes'),
+          laborMinutes: num(val(b, 'laborMinutes')), extras: num(val(b, 'extras')), margin: val(b, 'margin'),
+          parts: $$('#parts .part-row', b).map((row) => {
+            const v = (n) => $(`[name="${n}"]`, row).value.trim();
+            const pt = { name: v('pt-name'), qty: num(v('pt-qty')), minutes: num(v('pt-min')) };
+            if (kindSel.value === '3d') Object.assign(pt, { filamentId: v('pt-fil'), grams: num(v('pt-grams')) });
+            else Object.assign(pt, { materialId: v('pt-mat'), width: num(v('pt-w')), height: num(v('pt-h')) });
+            return pt;
+          }).filter((pt) => pt.qty > 0 && (pt.name || pt.filamentId || pt.materialId || pt.minutes)),
+          components: $$('#comps .comp-row', b).map((row) => ({ componentId: $('[name="comp-id"]', row).value, qty: num($('[name="comp-qty"]', row).value) }))
+            .filter((c) => c.componentId && c.qty > 0),
+        });
+        const refresh = () => {
+          partsBox.dataset.kind = kindSel.value;
+          const x = read();
+          const j = productCost(x, 1), c = j.cost;
+          $('#preview', b).innerHTML = `
+            <dl class="breakdown">
+              ${x.kind === '3d' ? `<dt>${t('Filamento / resina')}</dt><dd>${money(c.material)}</dd>` : `<dt>${t('Material en plancha (+{pct} % desperdicio)', { pct: fmtNum(S.settings.sheetWaste) })}</dt><dd>${money(c.sheet)}</dd>`}
+              <dt>${t('Electricidad')}</dt><dd>${money(c.electricity)}</dd>
+              <dt>${t('Amortización y mantenimiento')}${j.printerName ? ` · ${esc(j.printerName)}` : ''}</dt><dd>${money(c.machine)}</dd>
+              ${c.components ? `<dt>${t('Componentes externos')}</dt><dd>${money(c.components)}</dd>` : ''}
+              <dt>${t('Mano de obra')}</dt><dd>${money(c.labor)}</dd>
+              ${c.extras ? `<dt>${t('Extras')}</dt><dd>${money(c.extras)}</dd>` : ''}
+              <dt>${t('Margen de fallos ({pct} %)', { pct: fmtNum(S.settings.failureRate) })}</dt><dd>${money(c.failure)}</dd>
+            </dl>
+            <div class="price-box">
+              <div><div class="small muted">${t('Máquina por conjunto')}</div><strong>${fmtHours(j.hours)}</strong></div>
+              <div><div class="small muted">${t('Coste por conjunto')}</div><strong>${money(c.unit)}</strong></div>
+              <div><div class="small muted">${t('Precio sugerido (+{pct} %)', { pct: fmtNum(c.margin) })}</div><strong>${money(c.suggestedUnitPrice)}</strong></div>
+            </div>`;
+        };
+        b.addEventListener('input', refresh);
+        b.addEventListener('change', refresh);
+        b.addEventListener('click', (e) => {
+          if (e.target.closest('[data-remove-part]')) { e.target.closest('.part-row').remove(); refresh(); }
+          if (e.target.closest('[data-remove-comp]')) { e.target.closest('.comp-row').remove(); refresh(); }
+          if (e.target.closest('[data-close-link]')) modal.close();
+        });
+        $('#add-part', b).addEventListener('click', () => {
+          $('#parts', b).insertAdjacentHTML('beforeend', partRow({ name: '', qty: 1, filamentId: firstFil, grams: '', minutes: '' }));
+          refresh();
+        });
+        const addComp = $('#add-comp', b);
+        if (addComp) addComp.addEventListener('click', () => { $('#comps', b).insertAdjacentHTML('beforeend', prodCompRow({ componentId: '', qty: 1 })); refresh(); });
+        b._read = read;
+        refresh();
+      },
+      onSubmit: (b) => {
+        const x = b._read();
+        if (!x.parts.length && !x.components.length) { toast(t('Añade al menos una pieza o un componente.')); return false; }
+        const data = { ...x, photo: b._photos()[0] || '' };
+        if (isNew) {
+          S.products.push({ ...data, id: uid() });
+          persist(t('Escandallo guardado'));
+        } else {
+          Object.assign(S.products.find((y) => y.id === pd.id), data);
+          persist(t('Escandallo actualizado'));
+        }
+      },
+    });
+  }
+
+  /** Encargo de N conjuntos: coste, precio, presupuesto para copiar y registro del trabajo (y la venta). */
+  function productOrderForm(pd) {
+    if (!S.printers.length) { toast(t('Primero añade una máquina (impresora 3D o láser).')); return printerForm(); }
+    const first = productCost(pd, 1);
+    const round2 = (v) => Math.round(num(v) * 100) / 100;
+    openModal({
+      title: t('Encargo · {name}', { name: pd.name }),
+      submitLabel: t('Registrar trabajo'),
+      body: `<div class="form-grid">
+          ${field(t('Conjuntos'), numInp('sets', 1, 'min="1" step="1" required'))}
+          ${field(t('Precio por conjunto'), numInp('price', round2(first.cost.suggestedUnitPrice), 'min="0"'), { hint: '<span id="price-hint"></span>' })}
+          ${field(t('Fecha'), `<input type="date" name="date" value="${today()}">`)}
+          ${field(t('Nombre del trabajo'), inp('jobName', pd.name, 'required'))}
+        </div>
+        <div class="price-box" id="order-preview" style="margin-top:12px"></div>
+        <p class="small neg" id="order-short" hidden></p>
+        <div class="filters" style="margin:10px 0"><button type="button" class="btn small" id="copy-quote">${t('📋 Copiar presupuesto')}</button></div>
+        <div class="form-grid">
+          <div class="field wide"><label class="check"><input type="checkbox" name="deduct" checked> ${t('Descontar materiales y componentes del stock')}</label>
+            <label class="check"><input type="checkbox" name="withSale"> ${t('Registrar también la venta (encargo ya vendido)')}</label></div>
+          <div class="field" data-sale hidden><label>${t('Cliente')}</label>${inp('customer', '')}</div>
+          <div class="field" data-sale hidden><label>${t('Canal')}</label>${inp('channel', '', `list="channels" placeholder="${t('Etsy, tienda, feria…')}"`)}
+            <datalist id="channels">${['Etsy', 'Wallapop', 'Amazon', t('Tienda online'), t('Directo'), t('Feria')].map((x) => `<option value="${esc(x)}">`).join('')}</datalist></div>
+          <div class="field" data-sale hidden><label>${t('Comisiones y envío (€)')}</label>${numInp('fees', 0, 'min="0"')}</div>
+        </div>`,
+      onOpen: (b) => {
+        let priceTouched = false, nameTouched = false;
+        const sets = () => Math.max(1, Math.floor(num(val(b, 'sets'))) || 1);
+        $('[name="price"]', b).addEventListener('input', () => { priceTouched = true; });
+        $('[name="jobName"]', b).addEventListener('input', () => { nameTouched = true; });
+        $('[name="withSale"]', b).addEventListener('change', (e) => { $$('[data-sale]', b).forEach((el) => { el.hidden = !e.target.checked; }); });
+        const refresh = () => {
+          const n = sets(), j = productCost(pd, n), c = j.cost;
+          if (!priceTouched) $('[name="price"]', b).value = round2(c.suggestedUnitPrice);
+          if (!nameTouched) $('[name="jobName"]', b).value = n > 1 ? `${pd.name} ×${n}` : pd.name;
+          const price = num(val(b, 'price')), total = price * n;
+          $('#price-hint', b).textContent = price > 0
+            ? t('Margen sobre el precio: {pct} % · sugerido {price}', { pct: fmtNum(((price - c.unit) / price) * 100, 1), price: money(c.suggestedUnitPrice) })
+            : t('Sugerido: {price}', { price: money(c.suggestedUnitPrice) });
+          $('#order-preview', b).innerHTML = `
+            <div><div class="small muted">${t('Coste del encargo')}</div><strong>${money(c.total)}</strong><div class="small muted">${t('{price} por conjunto', { price: money(c.unit) })}</div></div>
+            <div><div class="small muted">${t('Total del encargo')}</div><strong>${money(total)}</strong><div class="small muted">${t('{n} × {price}', { n: fmtNum(n), price: money(price) })}</div></div>
+            <div><div class="small muted">${t('Beneficio')}</div><strong>${moneySigned(total - c.total)}</strong><div class="small muted">${t('Máquina: {time}', { time: fmtHours(j.hours) })}</div></div>`;
+          const short = jobShortages(j);
+          const box = $('#order-short', b);
+          box.hidden = !short.length;
+          box.textContent = short.length ? t('⚠ Falta stock: {list}', { list: short.join(', ') }) : '';
+          b._job = j;
+        };
+        $('#copy-quote', b).addEventListener('click', () => {
+          const n = sets(), price = num(val(b, 'price'));
+          const text = t('Presupuesto: {name}\n{n} × {price} = {total}', { name: pd.name, n: fmtNum(n), price: money(price), total: money(price * n) });
+          const done = () => toast(t('Presupuesto copiado'));
+          try { navigator.clipboard.writeText(text).then(done, () => toast(text, 6000)); } catch (e) { toast(text, 6000); }
+        });
+        b.addEventListener('input', refresh);
+        refresh();
+      },
+      onSubmit: (b) => {
+        const j = b._job, deduct = checked(b, 'deduct'), date = val(b, 'date') || today();
+        const rec = { id: uid(), ...j, name: val(b, 'jobName') || pd.name, fileUrl: '', photos: pd.photo ? [pd.photo] : [], date, notes: '', stockDeducted: deduct };
+        if (deduct) applyJobStock(rec, -1);
+        S.prints.push(rec);
+        if (checked(b, 'withSale')) {
+          S.sales.push({ id: uid(), date, printId: rec.id, description: pd.name, quantity: j.quantity, unitPrice: num(val(b, 'price')),
+            fees: num(val(b, 'fees')), unitCost: j.cost.unit, customer: val(b, 'customer'), channel: val(b, 'channel'), costFromPrint: true });
+          persist(t('Encargo registrado: trabajo y venta'));
+        } else {
+          persist(deduct ? t('Trabajo registrado y stock actualizado') : t('Trabajo registrado'));
+        }
+      },
+    });
+  }
+
+  // ================================================================ AYUDA
+
+  // Cada sección: id, título, a qué pantalla lleva y sus puntos (texto en español, se traduce con t()).
+  // server: solo en la versión con servidor.
+  const HELP = [
+    { id: 'start', title: N_('Primeros pasos'), items: [
+      N_('Libreta Maker apunta lo que gastas, lo que fabricas y lo que vendes, y calcula cuánto te cuesta de verdad cada pieza.'),
+      N_('Orden recomendado: 1) da de alta tus <b>máquinas</b>; 2) tu <b>filamento y resina</b>, <b>materiales en plancha</b> y <b>componentes</b>; 3) registra cada <b>trabajo</b> (o crea un <b>escandallo</b> para los productos de varias piezas); 4) apunta las <b>ventas</b> y los <b>gastos</b>; 5) mira el <b>resumen</b>.'),
+      N_('Al principio la app muestra <b>datos de ejemplo</b> para que la pruebes. Cuando quieras, pulsa <b>Empezar con mis datos</b> en el aviso de arriba.'),
+      N_('Junto al título de cada pantalla hay un <b>?</b> que te trae a su explicación.'),
+    ] },
+    { id: 'dashboard', view: 'dashboard', title: N_('Resumen'), items: [
+      N_('Elige el periodo arriba a la derecha (este mes, mes anterior, este año…).'),
+      N_('<b>Ingresos por ventas</b> y <b>beneficio de las ventas</b>: lo que has vendido y lo que te queda después de comisiones y del coste de lo vendido.'),
+      N_('<b>Gastos pagados</b> y <b>resultado de caja</b>: todo lo que has pagado en el periodo (aunque el material aún no se haya usado) frente a lo que has cobrado.'),
+      N_('El gráfico compara ingresos y gastos de los últimos 12 meses; ábrelo como tabla con <b>Ver como tabla</b>.'),
+      N_('Abajo verás el <b>stock bajo</b> (con botón para reponer), las piezas más rentables, los resultados por línea de negocio (3D, láser, sellos) y las piezas fabricadas que aún no has vendido.'),
+    ] },
+    { id: 'prints', view: 'prints', title: N_('Trabajos'), items: [
+      N_('Un trabajo es cada vez que fabricas algo: una impresión 3D, un corte o grabado láser o un sello. Pulsa <b>+ Registrar trabajo</b>.'),
+      N_('Elige el <b>tipo</b> y la <b>máquina</b>, las <b>unidades</b> que salen y el <b>tiempo total de máquina</b>.'),
+      N_('En 3D indica los <b>gramos de filamento o ml de resina</b> que dice el laminador para todo el trabajo. En láser y sellos, el <b>material en plancha</b> y las medidas que ocupa cada pieza.'),
+      N_('Añade los <b>componentes</b> que lleva cada pieza, las horas de <b>mano de obra</b>, los <b>extras</b> y, si quieres, otro <b>margen</b>. Abajo ves el coste al momento.'),
+      N_('Con <b>Descontar materiales y componentes del stock</b> marcado, el material se resta solo. Si editas o eliminas el trabajo, el stock se corrige.'),
+      N_('<b>Calculadora de coste</b>: el mismo formulario para hacer un presupuesto sin guardar nada.'),
+      N_('Puedes añadir <b>fotos</b> y el <b>enlace al archivo</b> (Printables, Thingiverse…). Con <b>Vender</b> registras la venta de ese trabajo con su coste.'),
+    ] },
+    { id: 'products', view: 'products', title: N_('Escandallos'), items: [
+      N_('Para productos que se venden como un <b>conjunto de piezas</b>: por ejemplo, un clicker con carcasa y tecla impresas, un interruptor y una anilla de llavero.'),
+      N_('Crea el escandallo una vez: añade cada <b>pieza</b> con las unidades por conjunto, el filamento (o la plancha y sus medidas) y los <b>minutos de máquina por pieza</b>. Si imprimes varias a la vez, divide el tiempo de la placa entre las piezas que caben.'),
+      N_('Añade los <b>componentes</b> de cada conjunto, los minutos de <b>montaje</b> y los <b>extras</b> (bolsita, etiqueta…). Verás el coste y el precio sugerido por conjunto.'),
+      N_('Para un pedido pulsa <b>Encargo</b>: indica cuántos conjuntos y el precio. Te muestra el coste, el total y el beneficio, y avisa si falta stock.'),
+      N_('<b>Copiar presupuesto</b> copia un texto para enviárselo al cliente. <b>Registrar trabajo</b> lo guarda y descuenta el stock; marca <b>Registrar también la venta</b> si el encargo ya está vendido.'),
+      N_('Los costes usan siempre los precios actuales de tu stock. Cambiar o borrar un escandallo no modifica los trabajos ya registrados. Con ⧉ lo duplicas para hacer variantes.'),
+    ] },
+    { id: 'sales', view: 'sales', title: N_('Ventas'), items: [
+      N_('Pulsa <b>+ Nueva venta</b> o <b>Vender</b> en un trabajo. Si eliges el trabajo, el coste por unidad se rellena solo.'),
+      N_('Una <b>venta libre</b> (sin trabajo) sirve para cosas que no has fabricado tú o que no registraste.'),
+      N_('Apunta las <b>comisiones y el envío</b> de la venta (Etsy, Wallapop, PayPal…): se restan del beneficio.'),
+      N_('Cada venta muestra el ingreso, el coste, el beneficio y el margen. Filtra por periodo arriba a la derecha.'),
+    ] },
+    { id: 'expenses', view: 'expenses', title: N_('Gastos'), items: [
+      N_('Las compras de filamento, planchas, componentes y máquinas se apuntan aquí solas al darlas de alta o reponer (si dejas marcada la casilla).'),
+      N_('Añade a mano el resto: luz, repuestos, embalaje y envíos… con <b>+ Nuevo gasto</b>.'),
+      N_('Editar o borrar un gasto no cambia el stock.'),
+    ] },
+    { id: 'filaments', view: 'filaments', title: N_('Filamento y resina'), items: [
+      N_('Da de alta cada bobina de <b>filamento</b> (en gramos) o envase de <b>resina</b> (en ml o g, como te lo dé el laminador) con su precio.'),
+      N_('Al crearla indica cuántas has comprado: se suma al stock y se apunta el gasto.'),
+      N_('<b>Reponer</b> suma una compra nueva. Para corregir el stock (por ejemplo, después de pesar la bobina), edítala con ✎.'),
+      N_('El <b>aviso de stock bajo</b> la marca en rojo y la lleva al resumen. Si lo dejas vacío, se usa el de Ajustes.'),
+    ] },
+    { id: 'materials', view: 'materials', title: N_('Materiales en plancha'), items: [
+      N_('Para el láser (madera, MDF, metacrilato, cuero…) y los sellos (plancha de fotopolímero y fotolito).'),
+      N_('Indica las medidas de la plancha y su precio: la app calcula el coste por cm² y, en cada trabajo, cobra el área de cada pieza más el % de desperdicio de Ajustes.'),
+      N_('El stock va en planchas y admite decimales: 0,5 es media plancha.'),
+    ] },
+    { id: 'components', view: 'components', title: N_('Componentes'), items: [
+      N_('Piezas que compras y montas: portalámparas, tiras LED, imanes, interruptores, anillas de llavero…'),
+      N_('Indica el precio del paquete y cuántas unidades trae: la app calcula el coste de cada una.'),
+      N_('Al usarlos en un trabajo o un escandallo se suman al coste y se descuentan del stock.'),
+    ] },
+    { id: 'printers', view: 'printers', title: N_('Máquinas'), items: [
+      N_('Da de alta cada impresora 3D (de filamento o de resina), láser o insoladora con su consumo, precio, vida útil y mantenimiento por hora.'),
+      N_('Con eso calcula su <b>coste por hora</b>: amortización (precio ÷ vida útil) + mantenimiento + electricidad.'),
+      N_('La máquina <b>★ predeterminada</b> se elige sola en los trabajos de impresión 3D. También verás las horas de uso, los trabajos y el beneficio de cada una.'),
+    ] },
+    { id: 'cost', title: N_('Cómo se calcula el coste'), items: [
+      N_('<b>Material</b>: filamento o resina usados, o el área de plancha con el desperdicio.'),
+      N_('<b>Máquina</b>: horas × (amortización + mantenimiento) y <b>electricidad</b>: horas × consumo × precio del kWh.'),
+      N_('<b>Componentes</b>, <b>mano de obra</b> (horas × precio por hora de Ajustes) y <b>extras</b>.'),
+      N_('<b>Margen de fallos</b>: un % sobre material, máquina y electricidad para cubrir las piezas que salen mal.'),
+      N_('El <b>precio sugerido</b> es el coste por unidad más tu margen de beneficio. Es orientativo: el precio final lo decides tú.'),
+    ] },
+    { id: 'settings', view: 'settings', title: N_('Ajustes y copias de seguridad'), items: [
+      N_('<b>Costes de producción</b>: moneda, precio de la luz, mano de obra, márgenes, desperdicio de plancha y aviso de stock bajo.'),
+      N_('<b>Idioma y apariencia</b>: el idioma de la app y el tema claro u oscuro.'),
+      N_('<b>Datos</b>: exporta una copia (JSON o en texto) para guardarla o pasarla a otro dispositivo, los CSV para una hoja de cálculo y las fotos en un ZIP. <b>Importar copia</b> sustituye todos tus datos por los de la copia.'),
+    ] },
+    { id: 'account', server: true, title: N_('Tu cuenta, sin conexión e historial'), items: [
+      N_('Tu libreta es solo tuya y se guarda en el servidor. Arriba a la derecha ves si está <b>Guardado</b>.'),
+      N_('Funciona <b>sin conexión</b>: los cambios se guardan en el dispositivo y se suben solos al volver internet. Si cambias cosas en dos dispositivos a la vez, se combinan.'),
+      N_('<b>Historial de versiones</b> (Ajustes → Tu cuenta): cada guardado crea una versión. Si algo se borra por error, restaura una anterior.'),
+    ] },
+    { id: 'photos', title: N_('Fotos'), items: [
+      N_('Los trabajos admiten varias fotos; los filamentos, materiales, componentes y escandallos, una. Añádelas desde su formulario con <b>📷 Añadir foto</b>: en el móvil puedes hacerla con la cámara.'),
+      N_('La primera foto de un trabajo es la principal (★ cambia cuál). Pulsa una miniatura para verla en grande.'),
+      N_('Las copias de seguridad no incluyen las fotos: descárgalas con <b>Descargar fotos (ZIP)</b> en Ajustes.'),
+    ] },
+    { id: 'agents', server: true, title: N_('Agentes de IA'), items: [
+      N_('Puedes usar tu libreta hablando con Claude u otro asistente compatible con MCP: «¿cuánto PLA me queda?», «presupuéstame 50 clickers», «apunta que he vendido 2 llaveros a 4 €».'),
+      N_('Crea un acceso en <b>Ajustes → Agentes de IA</b> y sigue las instrucciones para conectarlo. Elige si puede hacer cambios o solo consultar.'),
+      N_('Antes de guardar nada te lo resume y te pide confirmación. Sus cambios quedan en el historial con el nombre del acceso, y puedes revocarlo cuando quieras.'),
+    ] },
+    { id: 'install', title: N_('Instalar en el móvil'), items: [
+      N_('Abre la app en el navegador del móvil y, en Ajustes, pulsa <b>Instalar la app</b>. Si no aparece: en Android, menú ⋮ → <b>Instalar aplicación</b>; en iPhone, botón Compartir → <b>Añadir a pantalla de inicio</b>.'),
+    ] },
+  ];
+
+  const helpLink = (id) => ` <a class="help-link" href="#help:${id}" title="${t('Ayuda')}" aria-label="${t('Ayuda')}">?</a>`;
+  const helpSections = () => HELP.filter((h) => !h.server || remote);
+
+  function viewHelp() {
+    const goto = { dashboard: N_('Ir al resumen'), prints: N_('Ir a trabajos'), products: N_('Ir a escandallos'), sales: N_('Ir a ventas'), expenses: N_('Ir a gastos'),
+      filaments: N_('Ir a filamento y resina'), materials: N_('Ir a materiales'), components: N_('Ir a componentes'), printers: N_('Ir a máquinas'), settings: N_('Ir a ajustes') };
+    return `
+      <div class="page-head">
+        <h1>${t('Ayuda')}</h1>
+        <div class="actions"><input type="search" id="help-search" placeholder="${t('Buscar en la ayuda…')}" aria-label="${t('Buscar en la ayuda')}"></div>
+      </div>
+      <nav class="help-index">${helpSections().map((h) => `<a href="#help:${h.id}">${t(h.title)}</a>`).join('')}</nav>
+      <div class="help">${helpSections().map((h) => `
+        <details class="card help-section" id="help-${h.id}"${h.id === 'start' ? ' open' : ''}>
+          <summary><h2>${t(h.title)}</h2></summary>
+          <ul>${h.items.map((x) => `<li>${t(x)}</li>`).join('')}</ul>
+          ${h.view ? `<p><a href="#${h.view}">${t(goto[h.view])} →</a></p>` : ''}
+        </details>`).join('')}</div>
+      <p class="small muted" id="help-none" hidden>${t('Nada coincide con la búsqueda.')}</p>
+      <p class="small muted">${t('¿Dudas o algo no funciona? Escribe al administrador de la app.')}</p>`;
+  }
+
+  function wireHelp(section) {
+    const target = section && $(`#help-${section}`);
+    if (target) {
+      target.open = true;
+      requestAnimationFrame(() => target.scrollIntoView({ block: 'start' }));
+    }
+    $('#help-search').addEventListener('input', (e) => {
+      const q = e.target.value.trim().toLowerCase();
+      let any = false;
+      $$('.help-section').forEach((d) => {
+        const hit = !q || d.textContent.toLowerCase().includes(q);
+        d.hidden = !hit;
+        if (q && hit) d.open = true;
+        any = any || hit;
+      });
+      $('#help-none').hidden = any;
+    });
+  }
+
   // ================================================================ VENTAS
 
   function viewSales() {
@@ -1425,7 +1851,7 @@
 
     return `
       <div class="page-head">
-        <h1>${t('Ventas')}</h1>
+        <h1>${t('Ventas')}${helpLink('sales')}</h1>
         <div class="actions">${periodSelect('salesPeriod', ui.salesPeriod)}
           <button class="btn primary" data-action="new-sale">${t('+ Nueva venta')}</button></div>
       </div>
@@ -1541,7 +1967,7 @@
     const total = list.reduce((s, e) => s + num(e.amount), 0);
     return `
       <div class="page-head">
-        <h1>${t('Gastos')}</h1>
+        <h1>${t('Gastos')}${helpLink('expenses')}</h1>
         <div class="actions">${periodSelect('expensesPeriod', ui.expensesPeriod)}
           <button class="btn primary" data-action="new-expense">${t('+ Nuevo gasto')}</button></div>
       </div>
@@ -1590,7 +2016,7 @@
     const st = S.settings;
     const theme = safeGet('daprintbox:theme') || 'auto';
     return `
-      <div class="page-head"><h1>${t('Ajustes')}</h1></div>
+      <div class="page-head"><h1>${t('Ajustes')}${helpLink('settings')}</h1></div>
       <form class="card" id="settings-form">
         <h2>${t('Costes de producción')}</h2>
         <div class="form-grid">
@@ -1779,13 +2205,14 @@
     const c3 = { id: uid(), name: 'Anillas de llavero 25 mm', category: 'Llaveros y anillas', unit: 'ud.', price: 4.2, packUnits: 100, stock: 0, lowStock: 20, supplier: 'AliExpress' };
     const c4 = { id: uid(), name: 'Portalámparas E14 con cable', category: 'Iluminación', unit: 'ud.', price: 17.9, packUnits: 5, stock: 0, lowStock: 2, supplier: 'Leroy Merlin' };
     const c5 = { id: uid(), name: 'Mango de madera para sello 40 mm', category: 'Sellos', unit: 'ud.', price: 11.9, packUnits: 10, stock: 0, lowStock: 3, supplier: 'Amazon' };
+    const c7 = { id: uid(), name: 'Interruptor mecánico (switch)', category: 'Electrónica', unit: 'ud.', price: 6.9, packUnits: 10, stock: 0, lowStock: 5, supplier: 'AliExpress' };
     const c6 = { id: uid(), name: 'Almohadilla de tinta negra', category: 'Sellos', unit: 'ud.', price: 3.5, packUnits: 1, stock: 0, lowStock: 2, supplier: 'Papelería' };
     const m1 = { id: uid(), name: 'Contrachapado de abedul', category: 'Contrachapado', thickness: 3, sheetWidth: 600, sheetHeight: 400, price: 4.8, stock: 0, lowStock: 2, supplier: 'Maderas del Sur' };
     const m2 = { id: uid(), name: 'Metacrilato transparente', category: 'Metacrilato', thickness: 3, sheetWidth: 600, sheetHeight: 400, price: 11.5, stock: 0, lowStock: 1, supplier: 'Plásticos Levante' };
     const m3 = { id: uid(), name: 'Fotopolímero para sellos', category: 'Fotopolímero', thickness: 1.7, sheetWidth: 297, sheetHeight: 210, price: 9.5, stock: 0, lowStock: 1, supplier: 'Sellos Pro' };
     const m5 = { id: uid(), name: 'Fotolito (acetato impreso)', category: 'Fotolito / negativo', thickness: 0, sheetWidth: 297, sheetHeight: 210, price: 0.6, stock: 0, lowStock: 3, supplier: 'Copistería' };
     const m4 = { id: uid(), name: 'Cuero vegetal', category: 'Cuero', thickness: 2, sheetWidth: 300, sheetHeight: 300, price: 14, stock: 0, lowStock: 1, supplier: 'Curtidos Ubrique' };
-    const state = { version: 1, demo: true, settings: st, printers: [pr1, pr2, pr3, pr4, pr5], materials: [m1, m2, m3, m4, m5], components: [c1, c2, c3, c4, c5, c6], filaments: [f1, f2, f3, f4, f5], prints: [], sales: [], expenses: [] };
+    const state = { version: 1, demo: true, settings: st, printers: [pr1, pr2, pr3, pr4, pr5], materials: [m1, m2, m3, m4, m5], components: [c1, c2, c3, c4, c5, c6, c7], filaments: [f1, f2, f3, f4, f5], products: [], prints: [], sales: [], expenses: [] };
     state.expenses.push({ id: uid(), date: d(0, 1), category: 'maquinaria', description: 'Impresora Creality Ender 3 V3', amount: 229, printerId: pr2.id });
     state.expenses.push({ id: uid(), date: d(1, 5), category: 'maquinaria', description: 'Láser xTool S1 20 W', amount: 1099, printerId: pr3.id });
     state.expenses.push({ id: uid(), date: d(2, 2), category: 'maquinaria', description: 'Insoladora UV A4', amount: 320, printerId: pr4.id });
@@ -1793,7 +2220,7 @@
     buyM(m1, 10, d(1, 6)); buyM(m2, 3, d(1, 6)); buyM(m3, 4, d(2, 3)); buyM(m5, 10, d(2, 3)); buyM(m4, 2, d(3, 10)); buyM(m1, 5, d(4, 15));
     const buy = (f, n, date) => { f.remaining += n * f.spoolWeight; state.expenses.push({ id: uid(), date, category: 'filamento', description: `${n} × ${filamentLabel(f)}`, amount: n * f.price, filamentId: f.id }); };
     const buyC = (c, packs, date) => { c.stock += packs * c.packUnits; state.expenses.push({ id: uid(), date, category: 'componentes', description: `${packs} × ${c.name}`, amount: packs * c.price, componentId: c.id }); };
-    buyC(c5, 1, d(2, 3)); buyC(c6, 5, d(2, 3));
+    buyC(c5, 1, d(2, 3)); buyC(c6, 5, d(2, 3)); buyC(c7, 3, d(5, 1));
     buyC(c1, 5, d(2, 20)); buyC(c2, 1, d(0, 4)); buyC(c3, 1, d(3, 28)); buyC(c4, 1, d(4, 2));
     buy(f1, 3, d(0, 3)); buy(f2, 1, d(0, 3)); buy(f3, 1, d(1, 12)); buy(f4, 1, d(2, 5)); buy(f1, 2, d(4, 8)); buy(f5, 2, d(3, 1));
     state.expenses.push({ id: uid(), date: d(0, 10), category: 'repuestos', description: 'Boquillas 0.4 mm y cama PEI', amount: 34.9 });
@@ -1846,6 +2273,10 @@
     sell(p3, d(2, 1), 1, 24, 3.8, 'Marc', 'Etsy'); sell(p4, d(2, 20), 6, 7.5, 2, '', 'Feria');
     sell(p5, d(3, 22), 2, 45, 7.6, 'Ana', 'Etsy'); sell(p8, d(4, 27), 1, 49, 6.1, 'Jordi', 'Etsy'); sell(r1, d(4, 23), 10, 4.5, 2.6, 'Club de rol El Dado', 'Directo'); sell(p4, d(4, 2), 3, 7.5, 0, '', 'Directo');
     sell(p6, d(4, 18), 20, 3.5, 4.2, 'Club Ciclista', 'Directo'); sell(p7, d(5, Math.min(Number(td.slice(8, 10)), 10)), 2, 16, 2.2, '', 'Wallapop');
+    // Escandallo: un clicker se vende como conjunto (carcasa y tecla impresas + interruptor + anilla de llavero)
+    state.products.push({ id: uid(), name: 'Clicker con llavero', kind: '3d', printerId: pr1.id, notes: '', laborMinutes: 3, extras: 0.05, margin: '', photo: '',
+      parts: [{ name: 'Carcasa', qty: 1, filamentId: f1.id, grams: 4.5, minutes: 16 }, { name: 'Tecla', qty: 1, filamentId: f3.id, grams: 1.5, minutes: 6 }],
+      components: [{ componentId: c7.id, qty: 1 }, { componentId: c3.id, qty: 1 }] });
     return state;
   }
 
@@ -2246,8 +2677,8 @@
 
   // ================================================================ ENRUTADO Y EVENTOS
 
-  const VIEWS = { dashboard: viewDashboard, filaments: viewFilaments, materials: viewMaterials, components: viewComponents, printers: viewPrinters, prints: viewPrints, sales: viewSales, expenses: viewExpenses, settings: viewSettings };
-  const currentView = () => { const v = location.hash.slice(1); return VIEWS[v] ? v : 'dashboard'; };
+  const VIEWS = { dashboard: viewDashboard, filaments: viewFilaments, materials: viewMaterials, components: viewComponents, printers: viewPrinters, prints: viewPrints, products: viewProducts, help: viewHelp, sales: viewSales, expenses: viewExpenses, settings: viewSettings };
+  const currentView = () => { const v = location.hash.slice(1).split(':')[0]; return VIEWS[v] ? v : 'dashboard'; };
 
   // ---------------------------------------------------------------- agentes de IA (MCP)
 
@@ -2344,6 +2775,7 @@
     }
 
     if (v === 'settings') wireSettings();
+    if (v === 'help') wireHelp(location.hash.split(':')[1]);
   }
 
   // ---------------------------------------------------------------- idioma
@@ -2452,6 +2884,17 @@
       });
     },
     'sell-print': (id) => saleForm(null, id),
+    'new-product': () => productForm(),
+    'edit-product': (id) => productForm(find(S.products, id)),
+    'dup-product': (id) => productForm(find(S.products, id), { copy: true }),
+    'order-product': (id) => productOrderForm(find(S.products, id)),
+    'delete-product': (id) => {
+      const pd = find(S.products, id);
+      askConfirm(t('¿Eliminar el escandallo «{name}»? Los trabajos y ventas ya registrados no cambian.', { name: pd.name }), () => {
+        S.products = S.products.filter((x) => x.id !== id);
+        persist(t('Escandallo eliminado'));
+      });
+    },
     'new-sale': () => saleForm(),
     'edit-sale': (id) => saleForm(find(S.sales, id)),
     'delete-sale': (id) => {

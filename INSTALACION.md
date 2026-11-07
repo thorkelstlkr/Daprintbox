@@ -158,7 +158,7 @@ No hay que instalar nada más: viene en `api/mcp.php` y se activa solo.
    - **Otros** (ChatGPT en modo desarrollador, Cursor…): la misma dirección o, si permiten cabeceras, `…/api/mcp.php` con `Authorization: Bearer lm_…`.
 3. Para quitarle el acceso, *Revocar* en la misma tarjeta: deja de funcionar al momento.
 
-Qué puede hacer el asistente: ver el resumen económico, el stock, los trabajos, las ventas, los gastos y las fotos; calcular el coste de un trabajo sin guardarlo; y, con un acceso con cambios, registrar trabajos, ventas y gastos, reponer stock, crear o editar fichas, cambiar los ajustes y eliminar. No puede añadir fotos.
+Qué puede hacer el asistente: ver el resumen económico, el stock, los trabajos, los escandallos, las ventas, los gastos y las fotos; calcular el coste de un trabajo o presupuestar un encargo de un escandallo sin guardarlo; y, con un acceso con cambios, registrar trabajos, encargos, ventas y gastos, reponer stock, crear o editar fichas, cambiar los ajustes y eliminar. No puede añadir fotos.
 
 - Los cambios del asistente aparecen en el historial como *tu usuario · nombre del acceso* (por ejemplo «kike · Claude»); si algo sale mal, restaura la versión anterior. Las demás pantallas abiertas se actualizan solas.
 - El asistente necesita que el servidor sea accesible desde internet con **HTTPS** (Claude se conecta desde sus servidores, no desde tu móvil).

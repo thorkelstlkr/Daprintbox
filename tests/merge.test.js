@@ -53,5 +53,12 @@ test('ajustes campo a campo y sin cambios locales se queda lo del servidor', () 
   const remote = clone(base); remote.settings.defaultMargin = 80;
   assert.deepEqual(merge3(base, local, remote).settings, { kwhPrice: 0.2, defaultMargin: 80 });
   const remoteOnly = clone(base); remoteOnly.sales.push({ id: 'x' });
-  assert.deepEqual(merge3(base, clone(base), remoteOnly), { ...remoteOnly, demo: undefined });
+  assert.deepEqual(merge3(base, clone(base), remoteOnly), { ...remoteOnly, products: [], demo: undefined });
+});
+
+test('escandallos: se combinan como el resto de fichas', () => {
+  const b = { ...clone(base), products: [{ id: 'k1', name: 'Clicker', laborMinutes: 3 }] };
+  const local = clone(b); local.products[0].laborMinutes = 4;
+  const remote = clone(b); remote.products.push({ id: 'k2', name: 'Posavasos' });
+  assert.deepEqual(merge3(b, local, remote).products, [{ id: 'k1', name: 'Clicker', laborMinutes: 4 }, { id: 'k2', name: 'Posavasos' }]);
 });

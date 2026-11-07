@@ -73,9 +73,12 @@ function lm_sheet_cost_per_cm2($m)
     return $area > 0 ? lm_num(lm_get($m, 'price')) / $area : 0.0;
 }
 
+/** cm² de una fila de plancha con el desperdicio; count = piezas iguales por unidad (por defecto 1). */
 function lm_sheet_area_cm2($it, $quantity, $wastePct)
 {
-    return ((lm_num(lm_get($it, 'width')) * lm_num(lm_get($it, 'height'))) / 100) * $quantity * (1 + lm_num($wastePct) / 100);
+    $c = lm_get($it, 'count');
+    $count = ($c === null || $c === '') ? 1 : lm_num($c);
+    return ((lm_num(lm_get($it, 'width')) * lm_num(lm_get($it, 'height'))) / 100) * $count * $quantity * (1 + lm_num($wastePct) / 100);
 }
 
 /** Planchas que consume un trabajo, por material (medidas de cada pieza en mm + desperdicio). */
@@ -260,4 +263,52 @@ function lm_kind_stats($state, $from, $to)
         $out[$k]['profit'] += $t['profit'];
     }
     return $out;
+}
+
+/** Trabajo equivalente a N conjuntos de un escandallo (igual que Calc.productJob de la app). */
+function lm_product_job($p, $sets, $filamentsById, $materialsById)
+{
+    $n = lm_quantity($sets);
+    $kind = lm_get($p, 'kind') ? $p['kind'] : '3d';
+    $grams = array();
+    $sheets = array();
+    $minutes = 0.0;
+    foreach ((array) lm_get($p, 'parts', array()) as $pt) {
+        $q = lm_num(lm_get($pt, 'qty'));
+        if ($q <= 0) {
+            continue;
+        }
+        $minutes += lm_num(lm_get($pt, 'minutes')) * $q;
+        if ($kind === '3d') {
+            $fid = lm_get($pt, 'filamentId');
+            if ($fid && lm_num(lm_get($pt, 'grams')) > 0) {
+                $grams[$fid] = lm_get($grams, $fid, 0) + lm_num($pt['grams']) * $q * $n;
+            }
+        } elseif (lm_get($pt, 'materialId') && lm_num(lm_get($pt, 'width')) > 0 && lm_num(lm_get($pt, 'height')) > 0) {
+            $m = lm_get($materialsById, $pt['materialId']);
+            $sheets[] = array('materialId' => $pt['materialId'],
+                'materialName' => $m ? lm_get($m, 'name', '') . (lm_num(lm_get($m, 'thickness')) ? ' ' . $m['thickness'] . ' mm' : '') : '',
+                'width' => lm_num($pt['width']), 'height' => lm_num($pt['height']), 'count' => $q, 'costPerCm2' => $m ? lm_sheet_cost_per_cm2($m) : 0);
+        }
+    }
+    $items = array();
+    foreach ($grams as $id => $g) {
+        $f = lm_get($filamentsById, $id);
+        $unit = $f && lm_get($f, 'unit') ? $f['unit'] : ($f && lm_get($f, 'kind') === 'resina' ? 'ml' : 'g');
+        $items[] = array('filamentId' => $id, 'filamentName' => $f ? lm_get($f, 'name', '') . (lm_get($f, 'material') ? ' · ' . $f['material'] : '') : '',
+            'unit' => $unit, 'grams' => round($g, 2));
+    }
+    $components = array();
+    foreach ((array) lm_get($p, 'components', array()) as $c) {
+        if (lm_get($c, 'componentId') && lm_num(lm_get($c, 'qty')) > 0) {
+            $components[] = array('componentId' => $c['componentId'], 'qty' => lm_num($c['qty']));
+        }
+    }
+    $margin = lm_get($p, 'margin');
+    return array(
+        'kind' => $kind, 'printerId' => (string) lm_get($p, 'printerId', ''), 'items' => $items, 'sheets' => $sheets, 'components' => $components,
+        'hours' => ($minutes * $n) / 60, 'quantity' => $n, 'laborHours' => (lm_num(lm_get($p, 'laborMinutes')) * $n) / 60,
+        'extras' => lm_num(lm_get($p, 'extras')) * $n, 'margin' => $margin === null ? '' : $margin,
+        'productId' => (string) lm_get($p, 'id', ''), 'productName' => (string) lm_get($p, 'name', ''),
+    );
 }

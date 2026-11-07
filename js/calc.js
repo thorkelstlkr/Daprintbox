@@ -45,9 +45,13 @@
     return area > 0 ? num(material.price) / area : 0;
   }
 
-  /** cm² que consume una fila de plancha (medidas por pieza en mm) incluyendo el desperdicio. */
+  /**
+   * cm² que consume una fila de plancha (medidas por pieza en mm) incluyendo el desperdicio.
+   * it.count: piezas iguales por unidad producida (por defecto 1; lo usan los escandallos).
+   */
   const sheetAreaCm2 = (it, quantity, wastePct) =>
-    ((num(it.width) * num(it.height)) / 100) * quantity * (1 + num(wastePct) / 100);
+    ((num(it.width) * num(it.height)) / 100) * (it.count == null || it.count === '' ? 1 : num(it.count))
+    * quantity * (1 + num(wastePct) / 100);
 
   /**
    * Planchas consumidas por material.
@@ -266,9 +270,51 @@
     return months.map((k) => ({ ...map[k], result: map[k].income - map[k].spend }));
   }
 
+  /**
+   * Escandallo de un producto que se vende como conjunto de piezas (p. ej. un clicker: interruptor + anilla).
+   * Devuelve el trabajo equivalente para fabricar `sets` conjuntos, listo para printCost y para el stock:
+   *  - product.parts: [{ name, qty (piezas por conjunto), filamentId, grams (por pieza), minutes (de máquina por pieza),
+   *    materialId, width, height (mm por pieza, láser y sellos) }]
+   *  - product.components: [{ componentId, qty (por conjunto) }]
+   *  - product.laborMinutes y product.extras: por conjunto. product.margin: % para el precio sugerido.
+   * El filamento se suma por filamento para todos los conjuntos; las planchas van por pieza (count = piezas por conjunto).
+   */
+  function productJob(product, sets, filamentsById, materialsById) {
+    const p = product || {};
+    const n = Math.max(1, Math.floor(num(sets)) || 1);
+    const kind = p.kind || '3d';
+    const grams = {}, sheets = [];
+    let minutes = 0;
+    (p.parts || []).forEach((pt) => {
+      const q = num(pt.qty);
+      if (q <= 0) return;
+      minutes += num(pt.minutes) * q;
+      if (kind === '3d') {
+        if (pt.filamentId && num(pt.grams) > 0) grams[pt.filamentId] = (grams[pt.filamentId] || 0) + num(pt.grams) * q * n;
+      } else if (pt.materialId && num(pt.width) > 0 && num(pt.height) > 0) {
+        const m = materialsById && materialsById[pt.materialId];
+        sheets.push({ materialId: pt.materialId, materialName: m ? m.name + (num(m.thickness) ? ` ${m.thickness} mm` : '') : '',
+          width: num(pt.width), height: num(pt.height), count: q, costPerCm2: m ? sheetCostPerCm2(m) : 0 });
+      }
+    });
+    const items = Object.entries(grams).map(([id, g]) => {
+      const f = filamentsById && filamentsById[id];
+      const unit = (f && f.unit) || (f && f.kind === 'resina' ? 'ml' : 'g');
+      return { filamentId: id, filamentName: f ? f.name + (f.material ? ' · ' + f.material : '') : '', unit, grams: Math.round(g * 100) / 100 };
+    });
+    return {
+      kind, printerId: p.printerId || '', items, sheets,
+      components: (p.components || []).filter((c) => c.componentId && num(c.qty) > 0).map((c) => ({ componentId: c.componentId, qty: num(c.qty) })),
+      hours: (minutes * n) / 60, quantity: n,
+      laborHours: (num(p.laborMinutes) * n) / 60, extras: num(p.extras) * n,
+      margin: p.margin === undefined || p.margin === null ? '' : p.margin,
+      productId: p.id || '', productName: p.name || '',
+    };
+  }
+
   const Calc = {
     num, round2, costPerGram, componentUnitCost, componentsUsed, sheetCostPerCm2, sheetsUsed, kindStats, printerParams, machineHourCost, printerHourCost, printCost, gramsByFilament,
-    soldByPrint, printerStats, saleTotals, summary, lastMonths, monthlySeries,
+    soldByPrint, printerStats, saleTotals, summary, lastMonths, monthlySeries, productJob,
   };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = Calc;
