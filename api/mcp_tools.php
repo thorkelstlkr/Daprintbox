@@ -818,12 +818,13 @@ function lm_tools()
             'inputSchema' => array('type' => 'object', 'properties' => array(
                 'seccion' => array('type' => 'string', 'enum' => array('filamentos', 'materiales', 'componentes')),
                 'id' => array('type' => 'string'),
-                'unidades_compradas' => array('type' => 'number', 'minimum' => 0, 'description' => 'Bobinas o envases, planchas o paquetes comprados.'),
+                'unidades_compradas' => array('type' => 'number', 'minimum' => 0, 'description' => 'Bobinas o envases, planchas o paquetes comprados (unidades enteras, NUNCA gramos ni ml: para eso está «cantidad»).'),
                 'cantidad' => array('type' => 'number', 'minimum' => 0, 'description' => 'Opcional: cantidad exacta a sumar (g o ml de filamento o resina, unidades de componente). Por defecto unidades_compradas × contenido de la ficha.'),
                 'importe' => array('type' => 'number', 'minimum' => 0, 'description' => 'Total pagado. Por defecto unidades_compradas × precio de la ficha.'),
                 'fecha' => $dateToday,
                 'registrar_gasto' => array('type' => 'boolean', 'description' => 'Por defecto sí.'),
-                'actualizar_precio' => array('type' => 'boolean', 'description' => 'Guardar el nuevo precio por unidad (importe ÷ unidades_compradas) en la ficha.')),
+                'actualizar_precio' => array('type' => 'boolean', 'description' => 'Guardar el nuevo precio por unidad (importe ÷ unidades_compradas) en la ficha.'),
+                'confirmar' => array('type' => 'boolean', 'description' => 'Solo tras confirmarlo con el usuario, cuando la compra es inusualmente grande (más de 20 bobinas o envases, o más de 1000 de importe).')),
                 'required' => array('seccion', 'id', 'unidades_compradas'))),
         array('name' => 'guardar_ficha', 'title' => 'Crear o editar ficha', 'write' => true, 'annotations' => $rw + array('idempotentHint' => true),
             'description' => "Crea (sin id) o edita (con id) una ficha. Al editar solo cambian los campos indicados. Para dar de alta una compra con stock, créala con stock 0 y luego usa reponer_stock (así queda el gasto).\n" . lm_fields_doc(),
@@ -1230,6 +1231,11 @@ function lm_tool_reponer_stock($args, &$state, $today)
     $amount = lm_get($args, 'importe') !== null ? lm_number($args['importe'], 'importe', 0) : round($n * lm_num(lm_get($x, 'price')), 2);
     $date = lm_date(lm_get($args, 'fecha'), $today);
     $expense = lm_get($args, 'registrar_gasto', true) !== false && $amount > 0;
+    // Escribir gramos donde van bobinas dispara el stock y el gasto: las compras raras se confirman antes
+    if ($col === 'filaments' && ($n > 20 || ($expense && $amount > 1000)) && !lm_get($args, 'confirmar')) {
+        throw new LmToolError('Compra inusual: ' . lm_fmt($n, 2) . ' bobinas o envases y ' . lm_fmt($amount, 2) . ' de gasto. '
+            . 'Si querías sumar gramos o ml, usa «cantidad» con unidades_compradas en bobinas. Si de verdad es así, confírmalo con el usuario y repite con confirmar: true.');
+    }
     if ($col === 'filaments') {
         $u = lm_unit_of($x);
         $qty = lm_get($args, 'cantidad') !== null ? lm_number($args['cantidad'], 'cantidad', 0) : $n * lm_num(lm_get($x, 'spoolWeight'));

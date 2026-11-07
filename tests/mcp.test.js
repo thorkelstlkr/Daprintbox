@@ -180,3 +180,15 @@ test('herramientas: un encargo de escandallo cuesta lo mismo que en la app y reg
   assert.strictEqual(state.prints[2].sheets[0].count, 4);
   assert.ok(!edit.ok && /se crean y se editan en la app/.test(edit.error));
 });
+
+test('herramientas: reponer con gramos en lugar de bobinas pide confirmación', { skip: !php && 'sin php' }, () => {
+  const { results, state } = run({ mode: 'tools', state: fixture(), today: '2026-11-07', calls: [
+    { name: 'reponer_stock', args: { seccion: 'filamentos', id: 'f1', unidades_compradas: 1000 } },
+    { name: 'reponer_stock', args: { seccion: 'filamentos', id: 'f1', unidades_compradas: 1, cantidad: 1000 } },
+    { name: 'reponer_stock', args: { seccion: 'filamentos', id: 'f1', unidades_compradas: 30, confirmar: true } },
+  ] });
+  assert.ok(!results[0].ok && /Compra inusual/.test(results[0].error));
+  assert.ok(results[1].ok && results[2].ok);
+  assert.strictEqual(state.filaments[0].remaining, 800 + 1000 + 30 * 1000);
+  assert.strictEqual(state.expenses.filter((e) => e.filamentId === 'f1').length, 2);
+});

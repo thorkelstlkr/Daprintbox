@@ -461,11 +461,11 @@
         <div class="kpi"><div class="label">${t('Beneficio de las ventas')}</div><div class="value">${moneySigned(r.salesProfit)}</div>
           <div class="sub">${t('Margen {pct} % · tras coste y comisiones', { pct: fmtNum(r.marginPct, 1) })}</div></div>
         <div class="kpi"><div class="label">${t('Gastos pagados')}</div><div class="value">${money(r.totalSpend)}</div>
-          <div class="sub">${t('Filamento {a} · otros {b}', { a: money(r.filamentSpend), b: money(r.otherSpend) })}</div></div>
+          <div class="sub">${t('Compras de filamento y resina {a} · otros gastos {b}', { a: money(r.filamentSpend), b: money(r.otherSpend) })}</div></div>
         <div class="kpi"><div class="label">${t('Resultado de caja')}</div><div class="value">${moneySigned(r.cashResult)}</div>
           <div class="sub">${t('Ingresos − comisiones − gastos')}</div></div>
         <div class="kpi"><div class="label">${t('Stock de impresión 3D')}</div><div class="value">${[stockGrams || !stockMl ? fmtGrams(stockGrams) : '', stockMl ? fmtMl(stockMl) : ''].filter(Boolean).join(' · ')}</div>
-          <div class="sub">${t('Valor {v} · {n} bobinas y envases', { v: money(stockValue), n: S.filaments.length })}${S.materials.length ? ` · ${t('planchas {v}', { v: money(matValue) })}` : ''}${S.components.length ? ` · ${t('componentes {v}', { v: money(compValue) })}` : ''}</div></div>
+          <div class="sub">${t('Valor del stock {v} · {n} bobinas y envases', { v: money(stockValue), n: S.filaments.length })}${S.materials.length ? ` · ${t('planchas {v}', { v: money(matValue) })}` : ''}${S.components.length ? ` · ${t('componentes {v}', { v: money(compValue) })}` : ''}</div></div>
       </div>
 
       <div class="card">
@@ -645,7 +645,7 @@
                 <button class="icon-btn" data-action="delete-filament" data-id="${f.id}" aria-label="${t('Eliminar')}" title="${t('Eliminar')}">🗑</button>
               </td></tr>`;
           }).join('')}</tbody>
-          <tfoot><tr><td colspan="4">${t('Total')}</td><td>${totals}</td><td class="num">${money(totalV)}</td><td></td></tr></tfoot>
+          <tfoot><tr><td colspan="4">${q ? t('Total de lo que se muestra (hay una búsqueda)') : t('Total')}</td><td>${totals}</td><td class="num">${money(totalV)}</td><td></td></tr></tfoot>
         </table></div>` : `<div class="empty">${S.filaments.length ? t('Nada coincide con la búsqueda.') : t('Aún no tienes filamento ni resina. Añade tu primera bobina o envase.')}</div>`}
       </div>`;
   }
@@ -669,15 +669,24 @@
         ${field('<span data-lbl="size"></span> *', numInp('spoolWeight', f.spoolWeight, 'required min="1"'))}
         ${field('<span data-lbl="price"></span> *', numInp('price', f.price, 'required min="0"'))}
         ${isNew
-          ? field('<span data-lbl="count"></span>', numInp('spools', 1, 'min="0"'), { hint: t('Define el stock inicial.') })
+          ? field('<span data-lbl="count"></span>', numInp('spools', 1, 'min="0"'), { hint: t('Bobinas o envases enteros, no gramos. Define el stock inicial.') })
           : field('<span data-lbl="stock"></span>', numInp('remaining', f.remaining), { hint: '<span data-lbl="stockhint"></span>' })}
         ${field('<span data-lbl="low"></span>', numInp('lowStock', f.lowStock, `placeholder="${S.settings.lowStockGrams}"`), { hint: t('Vacío = valor de Ajustes.') })}
         ${isNew ? `${field(t('Fecha de compra'), `<input type="date" name="date" value="${today()}">`)}
           <div class="field wide"><label class="check"><input type="checkbox" name="asExpense" checked> ${t('Registrar la compra como gasto')}</label></div>` : ''}
         ${photoField(onePhoto(f), 1)}
-      </div>`,
+      </div>
+      ${isNew ? '<p id="buy-note"></p>' : ''}`,
       onOpen: (b) => {
         b._photos = wirePhotoField(b);
+        const buy = () => {
+          if (!isNew) return false;
+          const n = num(val(b, 'spools')), r = val(b, 'kind') === 'resina';
+          return buyNote(b, n, n * num(val(b, 'spoolWeight')), checked(b, 'asExpense') ? n * num(val(b, 'price')) : 0, r ? val(b, 'unit') : 'g');
+        };
+        b._buy = buy;
+        b.addEventListener('input', buy);
+        b.addEventListener('change', buy);
         const update = () => {
           const r = val(b, 'kind') === 'resina';
           const u = r ? val(b, 'unit') : 'g';
@@ -701,6 +710,7 @@
         });
         $('[name="unit"]', b).addEventListener('change', update);
         update();
+        buy();
       },
       onSubmit: (b) => {
         const kind = val(b, 'kind') === 'resina' ? 'resina' : 'filamento';
@@ -714,6 +724,7 @@
         if (data.spoolWeight <= 0) { toast(kind === 'resina' ? t('El contenido del envase debe ser mayor que 0.') : t('El peso de la bobina debe ser mayor que 0.')); return false; }
         if (isNew) {
           const n = num(val(b, 'spools'));
+          if (!confirmOddBuy(b, b._buy(), `${n}|${data.spoolWeight}|${data.price}`)) return false;
           const nf = { id: uid(), ...data, remaining: n * data.spoolWeight, createdAt: today() };
           S.filaments.push(nf);
           if (checked(b, 'asExpense') && n > 0) {
@@ -726,6 +737,26 @@
         }
       },
     });
+  }
+
+  /**
+   * Compra de filamento o resina: muestra lo que se va a sumar al stock y el gasto, y avisa si parece que se
+   * han escrito gramos donde van bobinas (lo que dispara el stock y el gasto). Devuelve true si hay que confirmar.
+   */
+  function buyNote(b, n, qty, amount, unit) {
+    const el = $('#buy-note', b);
+    const odd = n > 20 || amount > 1000;
+    el.className = 'small ' + (odd ? 'neg' : 'muted');
+    el.textContent = (odd ? t('⚠ ¿Seguro? Son {n} bobinas o envases: el campo cuenta unidades, no gramos.', { n: fmtNum(n, 2) }) + ' ' : '')
+      + t('Se sumarán {q} al stock y un gasto de {amount}.', { q: fmtAmount(qty, unit), amount: money(amount) });
+    return odd;
+  }
+  /** Con cantidades raras, el primer «Guardar» solo avisa; el segundo (sin cambiar nada) guarda. */
+  function confirmOddBuy(b, odd, key) {
+    if (!odd || b._oddOk === key) return true;
+    b._oddOk = key;
+    toast(t('Revisa la cantidad: si es correcta, pulsa otra vez para guardar.'), 5000);
+    return false;
   }
 
   function restockForm(f) {
@@ -741,16 +772,23 @@
         <div class="field wide"><label class="check"><input type="checkbox" name="asExpense" checked> ${t('Registrar como gasto')}</label>
         <label class="check"><input type="checkbox" name="updatePrice"> ${resin ? t('Actualizar el precio por envase con este importe') : t('Actualizar el precio por bobina con este importe')}</label></div>
       </div>
-      <p class="small muted">${t('Stock actual: {q}', { q: fmtStock(f) })}</p>`,
+      <p class="small muted">${t('Stock actual: {q}', { q: fmtStock(f) })}</p>
+      <p id="buy-note"></p>`,
       onOpen: (b) => {
+        const buy = () => buyNote(b, num(val(b, 'spools')), num(val(b, 'grams')), checked(b, 'asExpense') ? num(val(b, 'amount')) : 0, u);
         $('[name="spools"]', b).addEventListener('input', (e) => {
           const n = num(e.target.value);
           $('[name="grams"]', b).value = n * num(f.spoolWeight);
           $('[name="amount"]', b).value = Math.round(n * num(f.price) * 100) / 100;
         });
+        b.addEventListener('input', buy);
+        b.addEventListener('change', buy);
+        b._buy = buy;
+        buy();
       },
       onSubmit: (b) => {
         const qty = num(val(b, 'grams')), amount = num(val(b, 'amount')), n = num(val(b, 'spools'));
+        if (!confirmOddBuy(b, b._buy(), `${n}|${qty}|${amount}`)) return false;
         f.remaining = num(f.remaining) + qty;
         if (checked(b, 'updatePrice') && n > 0) f.price = Math.round((amount / n) * 100) / 100;
         if (checked(b, 'asExpense') && amount > 0) {
