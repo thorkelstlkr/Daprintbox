@@ -11,6 +11,12 @@ if (basename(isset($_SERVER['SCRIPT_FILENAME']) ? $_SERVER['SCRIPT_FILENAME'] : 
 
 define('DPB_GOOGLE_CERTS_URL', 'https://www.googleapis.com/oauth2/v1/certs');
 
+// Algunos hostings dejan serialize_precision en 17 y json_encode escribe 1.55 como 1.5500000000000000444…
+// Con -1 (PHP 7.1+) se escribe el número más corto que vale lo mismo. En PHP 5.6 no hace falta.
+if (PHP_VERSION_ID >= 70100) {
+    ini_set('serialize_precision', '-1');
+}
+
 /** Valor de un array con valor por defecto (equivale a $a[$k] ?? $default). */
 function dpb_get($array, $key, $default = null)
 {
