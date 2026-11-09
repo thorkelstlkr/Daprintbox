@@ -223,6 +223,7 @@
     modalSubmit = onSubmit;
     if (!modal.open) modal.showModal();
     if (onOpen) onOpen($('#modal-body'));
+    labelTables($('#modal-body'));
     Photos.hydrate($('#modal-body'));
     const first = $('#modal-body input, #modal-body select');
     if (first) first.focus();
@@ -2809,6 +2810,24 @@
     });
   }
 
+  /** En el móvil las tablas se ven como fichas: cada celda lleva el título de su columna. */
+  function labelTables(root) {
+    $$('.table-wrap table', root).forEach((tb) => {
+      const heads = $$('thead th', tb).map((th) => th.textContent.trim());
+      $$('tbody tr, tfoot tr', tb).forEach((tr) => {
+        let col = 0;
+        // la celda del nombre (la primera con negrita o miniatura) hace de título de la ficha
+        const title = tr.parentElement.tagName === 'TBODY' && Array.from(tr.cells).slice(0, 2).find((td) => td.querySelector('b, .with-thumb'));
+        if (title) title.classList.add('cell-title');
+        Array.from(tr.cells).forEach((td) => {
+          const span = td.colSpan || 1;
+          if (span === 1 && heads[col]) td.dataset.label = heads[col];
+          col += span;
+        });
+      });
+    });
+  }
+
   let photosCleaned = false;
 
   function render() {
@@ -2819,6 +2838,7 @@
     view.innerHTML = (S.demo ? `<div class="demo-banner" role="note"><span>${t('<b>Datos de ejemplo.</b> Explora la app con libertad; cuando quieras, empieza con los tuyos.')}</span>
       <button class="btn small" data-action="start-fresh">${t('Empezar con mis datos')}</button></div>` : '') + VIEWS[v]();
     wireChart();
+    labelTables(view);
     Photos.hydrate(view);
     if (!photosCleaned) {
       // una vez por sesión: se borran del dispositivo las fotos que la libreta ya no usa

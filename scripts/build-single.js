@@ -24,7 +24,8 @@ const markup = body
 const inline = (rel) => `data:image/png;base64,${fs.readFileSync(path.join(root, rel)).toString('base64')}`;
 const page = markup.replace(/src="((?:img|icons)\/[^"]+\.png)"/g, (_, rel) => `src="${inline(rel)}"`);
 
-const out = `${title}\n<style>\n${css}\n</style>\n${page.trim()}\n`;
+const viewport = head.match(/<meta name="viewport"[^>]*>/)[0];
+const out = `${viewport}\n${title}\n<style>\n${css}\n</style>\n${page.trim()}\n`;
 fs.mkdirSync(path.join(root, 'dist'), { recursive: true });
 fs.writeFileSync(path.join(root, 'dist', 'daprintbox.html'), out);
 console.log(`dist/daprintbox.html (${(out.length / 1024).toFixed(1)} KB)`);
