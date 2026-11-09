@@ -1154,7 +1154,7 @@
       <div class="card">
         ${list.length ? `<div class="table-wrap"><table>
           <thead><tr><th>${t('Fecha')}</th><th>${t('Pieza')}</th><th class="num">${t('Uds.')}</th><th class="num">${t('Material')}</th><th class="num">${t('Tiempo')}</th>
-            <th class="num">${t('Coste total')}</th><th class="num">${t('Coste ud.')}</th><th class="num">${t('PVP sugerido')}</th><th class="num">${t('Vendidas')}</th><th></th></tr></thead>
+            <th class="num">${t('Coste total')}</th><th class="num">${t('Coste ud.')}</th><th class="num">${t('PVP sugerido')}</th><th class="num">${t('Precio de venta')}</th><th class="num">${t('Vendidas')}</th><th></th></tr></thead>
           <tbody>${list.map((p) => {
             const c = p.cost || {};
             const byUnit = (u) => (p.items || []).filter((it) => (it.unit || unitOf(S.filaments.find((f) => f.id === it.filamentId))) === u).reduce((s, it) => s + num(it.grams), 0);
@@ -1171,6 +1171,12 @@
               <td class="num">${money(c.total)}</td>
               <td class="num"><b>${money(c.unit)}</b></td>
               <td class="num">${money(c.suggestedUnitPrice)}</td>
+              <td class="num">${(() => {
+                const sp = jobSalePrice(p), m = sp ? ((sp - num(c.unit)) / sp) * 100 : null;
+                return `<input type="number" class="sale-price" data-print-price="${p.id}" value="${sp == null ? '' : esc(sp)}" step="0.01" min="0" inputmode="decimal"
+                    placeholder="${esc(fmtNum(c.suggestedUnitPrice, 2))}" aria-label="${esc(t('Precio de venta de {name}', { name: p.name }))}">
+                  <div class="small ${m != null && m < 0 ? 'neg' : 'muted'}">${m == null ? t('sin fijar') : t('margen {pct} %', { pct: fmtNum(m, 1) })}</div>`;
+              })()}</td>
               <td class="num">${fmtNum(s)} / ${fmtNum(p.quantity)}</td>
               <td class="actions">
                 ${s < num(p.quantity) ? `<button class="btn small" data-action="sell-print" data-id="${p.id}">${t('Vender')}</button>` : `<span class="badge ok">${t('✓ Vendida')}</span>`}
@@ -1182,6 +1188,9 @@
       </div>
       <p class="small muted">${t('El coste incluye material (filamento o plancha con un {waste} % de desperdicio), componentes, electricidad ({kwh}/kWh), amortización y mantenimiento de la máquina, mano de obra, extras y un {fail} % por fallos. Cámbialo en Máquinas y Ajustes.', { waste: fmtNum(S.settings.sheetWaste), kwh: money(S.settings.kwhPrice), fail: fmtNum(S.settings.failureRate) })}</p>`;
   }
+
+  /** Precio de venta por unidad que has fijado en un trabajo, o null si no tiene (se usa el PVP sugerido). */
+  const jobSalePrice = (p) => (p && p.salePrice !== '' && p.salePrice != null && num(p.salePrice) > 0 ? num(p.salePrice) : null);
 
   // Enlace al archivo del trabajo (Printables, Thingiverse…): solo se enlazan direcciones http(s)
   function normalizeUrl(u) {
@@ -1293,6 +1302,7 @@
           ${field(t('Mano de obra (h)'), numInp('laborHours', p.laborHours, 'min="0"'), { hint: t('Diseño, montaje y acabado a {rate}/h', { rate: money(S.settings.laborRate) }) })}
           ${field(t('Extras (€)'), numInp('extras', p.extras, 'min="0"'), { hint: t('Gastos sueltos no inventariados.') })}
           ${field(t('Margen (%)'), numInp('margin', p.margin, `placeholder="${S.settings.defaultMargin}"`), { hint: t('Para el precio sugerido.') })}
+          ${field(t('Precio de venta por ud.'), numInp('salePrice', p.salePrice == null ? '' : p.salePrice, 'min="0" step="0.01"'), { hint: t('Lo que cobras. Vacío = PVP sugerido.') })}
           ${field(t('Notas'), inp('notes', p.notes))}
           ${quoteOnly || isNew ? `<div class="field wide"><label class="check"><input type="checkbox" name="deduct" ${quoteOnly ? '' : 'checked'}> ${t('Descontar materiales y componentes del stock')}</label></div>` : ''}
         </div>
@@ -1356,6 +1366,7 @@
           laborHours: num(val(b, 'laborHours')),
           extras: num(val(b, 'extras')),
           margin: val(b, 'margin'),
+          salePrice: val(b, 'salePrice') === '' ? '' : Math.max(0, num(val(b, 'salePrice'))),
         });
         const refresh = () => {
           const job = readJob();
@@ -1388,6 +1399,7 @@
             <div class="price-box">
               <div><div class="small muted">${t('Coste por unidad')}</div><strong>${money(c.unit)}</strong></div>
               <div><div class="small muted">${t('Precio sugerido (+{pct} %)', { pct: fmtNum(c.margin) })}</div><strong>${money(c.suggestedUnitPrice)}</strong></div>
+              ${jobSalePrice(job) ? `<div><div class="small muted">${t('Margen a tu precio de venta')}</div><strong class="${jobSalePrice(job) < c.unit ? 'neg' : ''}">${fmtNum(((jobSalePrice(job) - c.unit) / jobSalePrice(job)) * 100, 1)} %</strong></div>` : ''}
             </div>
             ${short.length ? `<p class="small neg">${t('⚠ Stock insuficiente: {list}', { list: short.map(({ f }) => esc(f.name) + ' (' + fmtStock(f) + ')').join(', ') })}</p>` : ''}
             ${shortSheets.length ? `<p class="small neg">${t('⚠ Faltan planchas: {list}', { list: shortSheets.map(({ mt, n }) => `${esc(materialLabel(mt))} (${t('necesitas {a}, hay {b}', { a: fmtNum(n, 2), b: fmtNum(mt.stock, 2) })})`).join(', ') })}</p>` : ''}
@@ -1723,7 +1735,8 @@
       },
       onSubmit: (b) => {
         const j = b._job, deduct = checked(b, 'deduct'), date = val(b, 'date') || today();
-        const rec = { id: uid(), ...j, name: val(b, 'jobName') || pd.name, fileUrl: '', photos: pd.photo ? [pd.photo] : [], date, notes: '', stockDeducted: deduct };
+        const rec = { id: uid(), ...j, name: val(b, 'jobName') || pd.name, fileUrl: '', photos: pd.photo ? [pd.photo] : [], date, notes: '', stockDeducted: deduct,
+          salePrice: num(val(b, 'price')) > 0 ? num(val(b, 'price')) : '' };
         if (deduct) applyJobStock(rec, -1);
         S.prints.push(rec);
         if (checked(b, 'withSale')) {
@@ -1763,6 +1776,7 @@
       N_('Con <b>Descontar materiales y componentes del stock</b> marcado, el material se resta solo. Si editas o eliminas el trabajo, el stock se corrige.'),
       N_('<b>Calculadora de coste</b>: el mismo formulario para hacer un presupuesto sin guardar nada.'),
       N_('Puedes añadir <b>fotos</b> y el <b>enlace al archivo</b> (Printables, Thingiverse…). Con <b>Vender</b> registras la venta de ese trabajo con su coste.'),
+      N_('En la lista, a la derecha del PVP sugerido, escribe el <b>precio de venta</b> que cobras por unidad: se guarda al momento, te muestra el margen real y es el precio que se propone al vender. Vacío, se usa el sugerido.'),
     ] },
     { id: 'products', view: 'products', title: N_('Escandallos'), items: [
       N_('Para productos que se venden como un <b>conjunto de piezas</b>: por ejemplo, un clicker con carcasa y tecla impresas, un interruptor y una anilla de llavero.'),
@@ -1951,7 +1965,7 @@
           const p = S.prints.find((x) => x.id === sel.value);
           if (!p) return;
           if (force || !val(b, 'description')) $('[name="description"]', b).value = p.name;
-          if (force || !val(b, 'unitPrice')) $('[name="unitPrice"]', b).value = Math.round(num(p.cost && p.cost.suggestedUnitPrice) * 100) / 100;
+          if (force || !val(b, 'unitPrice')) $('[name="unitPrice"]', b).value = jobSalePrice(p) != null ? jobSalePrice(p) : Math.round(num(p.cost && p.cost.suggestedUnitPrice) * 100) / 100;
           costInput.value = Math.round(num(p.cost && p.cost.unit) * 10000) / 10000;
           costTouched = false;
         };
@@ -3029,6 +3043,14 @@
   view.addEventListener('change', (e) => {
     const p = e.target.dataset.period;
     if (p) { ui[p] = e.target.value; render(); }
+    const jid = e.target.dataset.printPrice;
+    if (jid) {
+      const job = find(S.prints, jid);
+      if (!job) return;
+      const v = e.target.value.trim();
+      job.salePrice = v === '' ? '' : Math.max(0, num(v));
+      persist(v === '' ? t('Se usará el PVP sugerido') : t('Precio de venta guardado'));
+    }
   });
   view.addEventListener('input', (e) => {
     const k = e.target.dataset.filter;

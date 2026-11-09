@@ -298,6 +298,13 @@ function lm_out_printer($p, $state)
     );
 }
 
+/** Precio de venta por unidad fijado en un trabajo, o null si no tiene (se usa el PVP sugerido). */
+function lm_job_sale_price($p)
+{
+    $v = lm_get($p, 'salePrice');
+    return ($v === null || $v === '' || lm_num($v) <= 0) ? null : lm_num($v);
+}
+
 function lm_out_print($p, $sold)
 {
     $c = (array) lm_get($p, 'cost', array());
@@ -325,6 +332,7 @@ function lm_out_print($p, $sold)
         'mano_obra_horas' => lm_num(lm_get($p, 'laborHours')), 'extras' => lm_r2(lm_get($p, 'extras')),
         'coste_total' => lm_r2(lm_get($c, 'total')), 'coste_unidad' => lm_r2(lm_get($c, 'unit')),
         'precio_sugerido_unidad' => lm_r2(lm_get($c, 'suggestedUnitPrice')), 'margen_pct' => lm_num(lm_get($c, 'margin')),
+        'precio_venta_unidad' => lm_job_sale_price($p),
         'vendidas' => $s, 'disponibles' => max(0, $q - $s), 'stock_descontado' => (bool) lm_get($p, 'stockDeducted'),
         'enlace_archivo' => lm_get($p, 'fileUrl', ''), 'fotos' => count((array) lm_get($p, 'photos', array())), 'notas' => lm_get($p, 'notes', ''),
     );
@@ -693,6 +701,7 @@ function lm_job_schema($withRecord)
         $props['notas'] = array('type' => 'string');
         $props['enlace_archivo'] = array('type' => 'string', 'description' => 'Enlace al archivo usado (Printables, Thingiverse, MakerWorld…).');
         $props['descontar_stock'] = array('type' => 'boolean', 'description' => 'Descontar del stock el material y los componentes. Por defecto sí.');
+        $props['precio_venta'] = array('type' => 'number', 'minimum' => 0, 'description' => 'Precio de venta por unidad que cobra el usuario, si lo sabe. Se propondrá al vender.');
         $required[] = 'nombre';
     }
     $s = array('type' => 'object', 'properties' => $props);
@@ -709,7 +718,7 @@ function lm_fields_doc()
         . "- materiales: nombre, categoria, grosor_mm, ancho_plancha_mm, alto_plancha_mm, precio (por plancha), stock (planchas; admite decimales), aviso_stock_bajo, proveedor.\n"
         . "- componentes: nombre, categoria, unidad (ud., m, par…), precio (del paquete), unidades_por_paquete, stock, aviso_stock_bajo, proveedor.\n"
         . "- maquinas: nombre, tipo (3d|resina|laser|insoladora|otra), consumo_w, precio, vida_util_h, mantenimiento_por_hora, notas.\n"
-        . "- trabajos (solo editar): nombre, fecha, notas, enlace_archivo. Para cambiar materiales, tiempos o unidades, elimina el trabajo y regístralo de nuevo.\n"
+        . "- trabajos (solo editar): nombre, fecha, notas, enlace_archivo, precio_venta (por unidad; vacío = PVP sugerido). Para cambiar materiales, tiempos o unidades, elimina el trabajo y regístralo de nuevo.\n"
         . "- ventas (solo editar): descripcion, fecha, unidades, precio_unidad, comisiones, coste_unidad, cliente, canal.\n"
         . "- gastos (solo editar): fecha, categoria, descripcion, importe.";
 }
@@ -801,11 +810,10 @@ function lm_tools()
                 'trabajo_id' => array('type' => 'string', 'description' => 'Id del trabajo vendido (buscar_trabajos).'),
                 'descripcion' => array('type' => 'string'), 'fecha' => $dateToday,
                 'unidades' => array('type' => 'number', 'minimum' => 1, 'description' => 'Por defecto 1.'),
-                'precio_unidad' => array('type' => 'number', 'minimum' => 0, 'description' => 'Precio de venta por unidad.'),
+                'precio_unidad' => array('type' => 'number', 'minimum' => 0, 'description' => 'Precio de venta por unidad. Con trabajo_id, por defecto el precio de venta fijado en el trabajo.'),
                 'comisiones' => array('type' => 'number', 'minimum' => 0, 'description' => 'Total de comisiones y envío de la venta (Etsy, Wallapop, PayPal…).'),
                 'coste_unidad' => array('type' => 'number', 'minimum' => 0, 'description' => 'Solo si no quieres usar el coste del trabajo.'),
-                'cliente' => array('type' => 'string'), 'canal' => array('type' => 'string', 'description' => 'Etsy, Wallapop, tienda online, directo, feria…')),
-                'required' => array('precio_unidad'))),
+                'cliente' => array('type' => 'string'), 'canal' => array('type' => 'string', 'description' => 'Etsy, Wallapop, tienda online, directo, feria…')))),
         array('name' => 'registrar_gasto', 'title' => 'Registrar gasto', 'write' => true, 'annotations' => $rw,
             'description' => 'Registra un gasto (repuestos, embalaje, electricidad…). Para compras de filamento, planchas o componentes usa reponer_stock, que además suma al stock.',
             'inputSchema' => array('type' => 'object', 'properties' => array(
@@ -1158,7 +1166,8 @@ function lm_tool_registrar_trabajo($args, &$state, $today)
         $url = 'https://' . $url;
     }
     $rec = array('id' => lm_uid()) + $job + array('name' => $name, 'fileUrl' => $url, 'photos' => array(),
-        'date' => lm_date(lm_get($args, 'fecha'), $today), 'notes' => lm_text(lm_get($args, 'notas', ''), 1000), 'stockDeducted' => $deduct);
+        'date' => lm_date(lm_get($args, 'fecha'), $today), 'notes' => lm_text(lm_get($args, 'notas', ''), 1000), 'stockDeducted' => $deduct,
+        'salePrice' => lm_get($args, 'precio_venta') !== null ? lm_number($args['precio_venta'], 'precio_venta', 0) : '');
     if ($deduct) {
         lm_apply_job_stock($state, $rec, -1);
     }
@@ -1166,6 +1175,18 @@ function lm_tool_registrar_trabajo($args, &$state, $today)
     return lm_ok(array('mensaje' => $deduct ? 'Trabajo registrado y stock actualizado.' : 'Trabajo registrado (sin descontar stock).',
         'trabajo' => lm_out_print($rec, lm_sold_by_print($state['sales'])), 'desglose' => lm_out_cost($rec['cost'], $state['settings']),
         'avisos' => $warnings, 'moneda' => $state['settings']['currency']), true);
+}
+
+/** Precio de la venta: el indicado o, si es de un trabajo con precio de venta fijado, ese. */
+function lm_sale_unit_price($args, $p)
+{
+    if (lm_get($args, 'precio_unidad') !== null) {
+        return lm_number($args['precio_unidad'], 'precio_unidad', 0);
+    }
+    if ($p && lm_job_sale_price($p) !== null) {
+        return lm_job_sale_price($p);
+    }
+    throw new LmToolError('Falta «precio_unidad»: el trabajo no tiene precio de venta fijado. Pregunta al usuario a cuánto lo ha vendido.');
 }
 
 function lm_tool_registrar_venta($args, &$state, $today)
@@ -1186,7 +1207,7 @@ function lm_tool_registrar_venta($args, &$state, $today)
     $costGiven = lm_get($args, 'coste_unidad') !== null;
     $unitCost = $costGiven ? lm_number($args['coste_unidad'], 'coste_unidad', 0) : ($p ? lm_num(lm_get((array) lm_get($p, 'cost', array()), 'unit')) : 0);
     $sale = array('id' => lm_uid(), 'printId' => $p ? $p['id'] : null, 'description' => $desc, 'date' => lm_date(lm_get($args, 'fecha'), $today),
-        'quantity' => $qty, 'unitPrice' => lm_number(lm_get($args, 'precio_unidad'), 'precio_unidad', 0),
+        'quantity' => $qty, 'unitPrice' => lm_sale_unit_price($args, $p),
         'fees' => lm_number(lm_get($args, 'comisiones', 0), 'comisiones', 0), 'unitCost' => $unitCost,
         'customer' => lm_text(lm_get($args, 'cliente', '')), 'channel' => lm_text(lm_get($args, 'canal', '')), 'costFromPrint' => $p && !$costGiven);
     $warnings = array();
@@ -1289,7 +1310,8 @@ function lm_field_map($col)
         'printers' => array('nombre' => array('name', 'text'), 'tipo' => array('type', 'enum:3d,resina,laser,insoladora,otra'), 'consumo_w' => array('watts', 'num'),
             'precio' => array('price', 'num'), 'vida_util_h' => array('lifeHours', 'pos'), 'mantenimiento_por_hora' => array('maintenancePerHour', 'num'),
             'notas' => array('notes', 'text')),
-        'prints' => array('nombre' => array('name', 'text'), 'fecha' => array('date', 'date'), 'notas' => array('notes', 'long'), 'enlace_archivo' => array('fileUrl', 'url')),
+        'prints' => array('nombre' => array('name', 'text'), 'fecha' => array('date', 'date'), 'notas' => array('notes', 'long'), 'enlace_archivo' => array('fileUrl', 'url'),
+            'precio_venta' => array('salePrice', 'opt')),
         'sales' => array('descripcion' => array('description', 'text'), 'fecha' => array('date', 'date'), 'unidades' => array('quantity', 'pos'),
             'precio_unidad' => array('unitPrice', 'num'), 'comisiones' => array('fees', 'num'), 'coste_unidad' => array('unitCost', 'num'),
             'cliente' => array('customer', 'text'), 'canal' => array('channel', 'text')),
@@ -1550,6 +1572,7 @@ function lm_tool_registrar_encargo($args, &$state, $today)
             'fees' => lm_number(lm_get($sale, 'comisiones', 0), 'comisiones', 0), 'unitCost' => $rec['cost']['unit'],
             'customer' => lm_text(lm_get($sale, 'cliente', '')), 'channel' => lm_text(lm_get($sale, 'canal', '')), 'costFromPrint' => true);
         $state['sales'][] = $s;
+        $state['prints'][count($state['prints']) - 1]['salePrice'] = $price;
         $out['mensaje'] .= ' Venta registrada.';
         $out['venta'] = lm_out_sale($s);
     }

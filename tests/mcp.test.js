@@ -192,3 +192,18 @@ test('herramientas: reponer con gramos en lugar de bobinas pide confirmación', 
   assert.strictEqual(state.filaments[0].remaining, 800 + 1000 + 30 * 1000);
   assert.strictEqual(state.expenses.filter((e) => e.filamentId === 'f1').length, 2);
 });
+
+test('herramientas: precio de venta del trabajo al registrar, editar y vender', { skip: !php && 'sin php' }, () => {
+  const { results, state } = run({ mode: 'tools', state: fixture(), today: '2026-11-09', calls: [
+    { name: 'registrar_venta', args: { trabajo_id: 'p1', unidades: 1 } },
+    { name: 'guardar_ficha', args: { seccion: 'trabajos', id: 'p1', datos: { precio_venta: 6.5 } } },
+    { name: 'registrar_venta', args: { trabajo_id: 'p1', unidades: 1 } },
+    { name: 'registrar_trabajo', args: { nombre: 'Llavero', horas: 1, filamentos: [{ id: 'f1', cantidad: 20 }], precio_venta: 3 } },
+    { name: 'ver_ficha', args: { seccion: 'trabajos', id: 'p1' } },
+  ] });
+  assert.ok(!results[0].ok && /no tiene precio de venta/.test(results[0].error));
+  assert.ok(results.slice(1).every((r) => r.ok), JSON.stringify(results));
+  assert.strictEqual(state.sales[state.sales.length - 1].unitPrice, 6.5);
+  assert.strictEqual(state.prints.find((p) => p.name === 'Llavero').salePrice, 3);
+  assert.strictEqual(results[4].data.precio_venta_unidad, 6.5);
+});

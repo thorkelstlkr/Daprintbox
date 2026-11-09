@@ -386,3 +386,4 @@ textarea { resize: vertical; }
 .help-section ul { margin: 0; padding: 0 18px 4px 40px; }
 .help-section li { margin: 6px 0; line-height: 1.5; max-width: 75ch; }
 .help-section p { margin: 8px 18px 14px 40px; }
+.sale-price { width: 92px; text-align: right; padding: 6px 8px; }
